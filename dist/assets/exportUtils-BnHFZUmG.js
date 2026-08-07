@@ -1,2 +1,0 @@
-function e(e,t){let n=new Blob([`﻿`+e],{type:`text/csv;charset=utf-8`}),r=URL.createObjectURL(n),i=document.createElement(`a`);i.href=r,i.download=t,document.body.appendChild(i),i.click(),i.remove(),URL.revokeObjectURL(r)}function t(e){let t=e==null?``:String(e);return/[",\n]/.test(t)?`"${t.replace(/"/g,`""`)}"`:t}function n(e,n){let r=[e.map(t).join(`,`)];for(let e of n)r.push(e.map(t).join(`,`));return r.join(`\r
-`)}function r({filename:t,header:r,rows:i}){e(n(r,i),t)}function i(e,t=0){return e==null||!Number.isFinite(e)?`—`:`${(e*100).toFixed(t)}%`}export{i as n,r as t};

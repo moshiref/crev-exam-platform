@@ -1,1 +1,0 @@
-import{Et as e}from"./hi2-ooCXgktw.js";var t=e();function n({label:e=`أو`}){return(0,t.jsxs)(`div`,{className:`flex items-center gap-4`,children:[(0,t.jsx)(`span`,{className:`h-px flex-1 bg-slate-200`}),(0,t.jsx)(`span`,{className:`text-xs font-semibold text-slate-400`,children:e}),(0,t.jsx)(`span`,{className:`h-px flex-1 bg-slate-200`})]})}export{n as t};
