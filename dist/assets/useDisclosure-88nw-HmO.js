@@ -1,0 +1,1 @@
+import{Dt as e,kt as t}from"./hi2-ooCXgktw.js";var n=t(e(),1);function r(e=!1){let[t,r]=(0,n.useState)(e);return{isOpen:t,open:(0,n.useCallback)(()=>r(!0),[]),close:(0,n.useCallback)(()=>r(!1),[]),toggle:(0,n.useCallback)(()=>r(e=>!e),[])}}export{r as t};

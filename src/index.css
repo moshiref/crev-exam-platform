@@ -1,0 +1,165 @@
+/* ==========================================================================
+   Fonts — Tajawal for display/headings, Cairo for body copy.
+   Both are high-quality, professional Arabic-first typefaces that keep
+   the platform feeling premium and educational rather than templated.
+   Must precede the Tailwind import per CSS @import ordering rules.
+   ========================================================================== */
+@import url("https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Cairo:wght@300;400;500;600;700&display=swap");
+@import "tailwindcss";
+
+/* ==========================================================================
+   Design tokens — CREV Exam Platform theme
+   ========================================================================== */
+@theme {
+  --color-primary: #2563eb;
+  --color-secondary: #3b82f6;
+  --color-accent: #22c55e;
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-bg: #f8fafc;
+  --color-card: #ffffff;
+
+  --font-display: "Tajawal", "Cairo", sans-serif;
+  --font-body: "Cairo", "Tajawal", sans-serif;
+
+  --radius-card: 20px;
+  --radius-auth: 24px;
+
+  --shadow-soft: 0 10px 30px -10px rgba(37, 99, 235, 0.15);
+  --shadow-soft-lg: 0 20px 45px -12px rgba(37, 99, 235, 0.22);
+  --shadow-glass: 0 25px 60px -15px rgba(15, 23, 42, 0.18);
+}
+
+/* Gentle shake for invalid form fields */
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.animate-shake {
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+/* Respect users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Visible keyboard focus ring across the app */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+/* ==========================================================================
+   Teacher dashboard dark mode.
+   `useTheme` toggles the `t-dark` class on <html>. Darkening is achieved by
+   overriding the compiled utility classes the shared UI components use — no
+   design tokens are changed and the light theme is untouched.
+   ========================================================================== */
+.t-dark {
+  color-scheme: dark;
+  --color-bg: #0b1220;
+  --color-card: #101a2e;
+}
+
+.t-dark body {
+  background-color: var(--color-bg);
+  color: #e2e8f0;
+}
+
+.t-dark .bg-bg,
+.t-dark .bg-slate-50,
+.t-dark .bg-slate-50\/60,
+.t-dark .bg-slate-50\/70,
+.t-dark .bg-blue-50\/60,
+.t-dark .bg-blue-50\/40 {
+  background-color: #0b1220;
+}
+
+.t-dark .bg-card,
+.t-dark .bg-white,
+.t-dark .bg-white\/80,
+.t-dark .bg-white\/70 {
+  background-color: var(--color-card);
+}
+
+.t-dark .text-slate-900 { color: #f1f5f9; }
+.t-dark .text-slate-800 { color: #e2e8f0; }
+.t-dark .text-slate-700 { color: #cbd5e1; }
+.t-dark .text-slate-600 { color: #94a3b8; }
+.t-dark .text-slate-500 { color: #64748b; }
+.t-dark .text-slate-400 { color: #64748b; }
+
+.t-dark .ring-slate-100,
+.t-dark .ring-slate-200 { --tw-ring-color: #1e293b; }
+.t-dark .border-slate-200 { border-color: #1e293b; }
+.t-dark .border-slate-100,
+.t-dark .divide-slate-50,
+.t-dark .divide-slate-100 { border-color: #1e293b; }
+
+.t-dark .bg-slate-100 { background-color: #1e293b; }
+.t-dark .hover\:bg-slate-100:hover { background-color: #1e293b; }
+.t-dark .hover\:bg-slate-50\/70:hover { background-color: rgba(30, 41, 59, 0.7); }
+.t-dark .border-white\/60 { border-color: rgba(255, 255, 255, 0.12); }
+
+.t-dark .shadow-soft,
+.t-dark .shadow-soft-lg {
+  box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55);
+}
+
+.t-dark .bg-white\/80 { background-color: rgba(16, 26, 46, 0.85); }
+
+/* Slim, unobtrusive scrollbars for sidebars / tables */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 999px;
+}
+
+/* Printable student card — everything else is hidden when printing
+   from the "Print Student Card" flow. The printable node opts in with
+   `data-print-area`. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [data-print-area], [data-print-area] * {
+    visibility: visible;
+  }
+  [data-print-area] {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+  }
+}
