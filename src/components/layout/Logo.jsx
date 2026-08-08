@@ -18,7 +18,7 @@ export default function Logo({ size = 'md', withText = true }) {
       </span>
       {withText && (
         <span className={`font-display font-extrabold text-slate-900 ${textSize}`}>
-          CREV Exam Platform
+          منصة التميز
         </span>
       )}
     </div>

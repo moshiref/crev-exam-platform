@@ -28,7 +28,7 @@ const PRIMARY_COLOR_OPTIONS = [
 ]
 
 const DEFAULT_SETTINGS = {
-  centerName: 'CREV Exam Platform',
+  centerName: 'منصة التميز',
   tagline: '',
   primaryColor: '#2563EB',
   showSplash: true,

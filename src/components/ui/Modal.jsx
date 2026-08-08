@@ -37,7 +37,7 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
             exit={{ opacity: 0, y: 16, scale: 0.97 }}
             transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className={`max-h-[90vh] w-full ${maxWidth} overflow-y-auto scrollbar-thin rounded-card bg-card p-6 shadow-glass sm:p-8`}
+            className={`max-h-[90vh] w-full ${maxWidth} overflow-y-auto scrollbar-thin rounded-card bg-card p-5 shadow-glass sm:p-8`}
           >
             <div className="mb-6 flex items-center justify-between">
               <h3 className="font-display text-lg font-extrabold text-slate-900 sm:text-xl">{title}</h3>

@@ -131,7 +131,7 @@ export default function TeacherStudentFormModal({ isOpen, onClose, onSubmit, ini
           />
         </div>
 
-        <div className="mt-2 flex gap-3 sm:col-span-2">
+        <div className="mt-2 flex flex-col gap-3 sm:col-span-2 sm:flex-row">
           <Button type="button" variant="outline" size="md" className="flex-1" onClick={onClose}>
             إلغاء
           </Button>

@@ -251,26 +251,107 @@ async function loadTable(key, select, mapRow) {
   if (!error && data) cache[key] = data.map(mapRow)
 }
 
-/** Fetches every table from Supabase into the cache (no-op in mock mode). */
-export async function hydrateAll() {
-  if (!live()) return
-  await Promise.all([
-    loadTable('students', 'id, name, stage, grade, parent_phone, status, created_at', rowToStudent),
-    loadTable('teachers', '*', rowToTeacher),
-    loadTable('subjects', '*', rowToSubject),
-    loadTable('exams', '*', rowToExam),
-    loadTable('attempts', '*', rowToAttempt),
-    loadTable('classes', '*', rowToClass),
-  ])
-  /* eslint-disable-next-line no-console */
-  console.log(
-    '[hydrateAll] exams fetch  :', cache.exams.length, 'rows |',
-    'first row teacher_id =', cache.exams[0]?.teacherId
-  )
-  /* eslint-disable-next-line no-console */
-  console.log('[hydrateAll] owner filter example → teacher sees', listExamsForTeacher(
-    getCurrentTeacher?.()?.id ?? null, getCurrentTeacher?.()?.subject ?? null
-  ).length, 'of', cache.exams.length, 'exams')
+/**
+ * Fetches the scoped teacher data through the SECURITY DEFINER RPCs so the
+ * database itself decides which students / exams / results a teacher may see.
+ * If the RPCs are not deployed yet (fresh DB), falls back to loading the full
+ * tables — the list getters still apply JS-side scoping (weaker, but the app
+ * keeps working until `supabase/rbac_teacher.sql` is run).
+ */
+async function loadTeacherScoped(key, teacher) {
+  const rpc = {
+    students: { fn: 'teacher_scoped_students', map: rowToStudent },
+    exams: { fn: 'teacher_scoped_exams', map: rowToExam },
+    attempts: { fn: 'teacher_scoped_attempts', map: rowToAttempt },
+  }[key]
+  if (!rpc) return
+  const token = teacher?.session_token || ''
+  // No session token means the identity cannot be verified server-side (e.g. a
+  // session created before `teacher_login` was deployed, or a rotated token).
+  // Fall back to the plain load + JS scoping — identical to today's behavior —
+  // until the teacher logs in again and receives a fresh token.
+  if (!token) {
+    await loadTeacherScopedFallback(key)
+    return
+  }
+  try {
+    const { data, error } = await supabase.rpc(rpc.fn, {
+      p_teacher_id: teacher?.id,
+      p_session_token: token,
+    })
+    if (!error) {
+      cache[key] = (data || []).map(rpc.map)
+      return
+    }
+    if (error.code === 'PGRST202' || error.code === '42883') {
+      // RPC not deployed yet → plain load; JS scoping still applies on read.
+      await loadTeacherScopedFallback(key)
+    }
+  } catch {
+    await loadTeacherScopedFallback(key)
+  }
+}
+
+/** Full-table load used only when the teacher scoping RPCs are unavailable. */
+async function loadTeacherScopedFallback(key) {
+  const loaders = {
+    students: () => loadTable('students', 'id, name, stage, grade, parent_phone, status, password, created_at', rowToStudent),
+    exams: () => loadTable('exams', '*', rowToExam),
+    attempts: () => loadTable('attempts', '*', rowToAttempt),
+  }
+  if (loaders[key]) await loaders[key]()
+}
+
+let hydratePromise = null
+
+/**
+ * Fetches data from Supabase into the cache (no-op in mock mode).
+ *
+ * Single-flight: concurrent callers — several hooks on the same page and
+ * React StrictMode double-mounts in dev — share ONE in-flight load, so no
+ * duplicate requests are ever fired on mount.
+ *
+ * Ordering is auth-first: the current teacher is read synchronously (the
+ * teacher session lives in sessionStorage — there is no async Supabase Auth
+ * session) BEFORE any network call, and teacher-scoped RPCs are only invoked
+ * for a verified identity (a teacher row carrying a `session_token`). When a
+ * teacher is logged in ONLY their scoped rows are fetched — the browser never
+ * receives out-of-scope students / exams / results, nor any other teacher's
+ * data. Admins / demo load everything as before.
+ */
+export function hydrateAll() {
+  if (!live()) return Promise.resolve()
+  if (hydratePromise) return hydratePromise
+  hydratePromise = (async () => {
+    try {
+      const teacher = getCurrentTeacher ? getCurrentTeacher() : null
+      if (teacher) {
+        await Promise.all([
+          loadTeacherScoped('students', teacher),
+          loadTeacherScoped('exams', teacher),
+          loadTeacherScoped('attempts', teacher),
+        ])
+        // Teacher sessions never hold the teachers / subjects / classes tables.
+        return
+      }
+      await Promise.all([
+        loadTable('students', 'id, name, stage, grade, parent_phone, status, created_at', rowToStudent),
+        loadTable('teachers', '*', rowToTeacher),
+        loadTable('subjects', '*', rowToSubject),
+        loadTable('exams', '*', rowToExam),
+        loadTable('attempts', '*', rowToAttempt),
+        loadTable('classes', '*', rowToClass),
+      ])
+      /* eslint-disable-next-line no-console */
+      console.log(
+        '[hydrateAll] exams fetch  :', cache.exams.length, 'rows |',
+        'first row teacher_id =', cache.exams[0]?.teacherId
+      )
+    } finally {
+      hydratePromise = null
+    }
+  })()
+  return hydratePromise
 }
 
 /** True when the app is talking to a real Supabase project. */
@@ -280,16 +361,54 @@ export const isBackendLive = () => live()
 // Students
 // ---------------------------------------------------------------------------
 
+/**
+ * True when the caller is a logged-in teacher. Used to scope every data read
+ * and to lock admin-only mutations away from teacher accounts.
+ */
+function isTeacherContext() {
+  return Boolean(getCurrentTeacher ? getCurrentTeacher() : null)
+}
+
+/**
+ * Strict student scoping for a teacher: a student is visible ONLY when BOTH
+ * their `stage` and their `grade` are inside the admin-granted permissions.
+ * If the teacher has no stages or no grades granted, they see nothing
+ * (admin must grant a scope). Admins / demo mode are unrestricted.
+ */
+function studentsWithinPermissions(teacher, students) {
+  if (!teacher) return students
+  const stages = asList(teacher.stages)
+  const grades = asList(teacher.grades)
+  if (!stages.length || !grades.length) return []
+  return students.filter(
+    (s) => inAllowed(stages, s.stage) && inAllowed(grades, s.grade)
+  )
+}
+
+/** Throws when a logged-in teacher tries an admin-only mutation. */
+function assertAdminContext() {
+  if (isTeacherContext()) {
+    throw new Error('هذه العملية متاحة للإدارة فقط.')
+  }
+}
+
+/** Rejects a teacher touching a student that is outside their granted scope. */
+function assertStudentInScope(student) {
+  if (!isTeacherContext()) return
+  if (!student || studentsWithinPermissions(currentOwner(), [student]).length === 0) {
+    throw new Error('لا يمكنك تعديل أو حذف طالب خارج الصفوف المسموح بها لك.')
+  }
+}
+
 export function listStudents() {
-  return clone(cache.students)
+  const teacher = currentOwner()
+  return teacher ? clone(studentsWithinPermissions(teacher, cache.students)) : clone(cache.students)
 }
 
 /** Creates a student, auto-generating id / password / parent PIN unless given.
  *  Teachers are NOT allowed to create students — admin only. */
 export async function createStudent(formValues) {
-  if (getCurrentTeacher && getCurrentTeacher()) {
-    throw new Error('إضافة الطلاب متاحة للإدارة فقط.')
-  }
+  assertAdminContext()
   const student = {
     ...formValues,
     id: formValues.id || generateNextStudentId(cache.students),
@@ -309,6 +428,8 @@ export async function createStudent(formValues) {
 }
 
 export async function updateStudent(studentId, formValues) {
+  const existing = cache.students.find((s) => s.id === studentId)
+  assertStudentInScope(existing)
   cache.students = cache.students.map((s) => (s.id === studentId ? { ...s, ...formValues } : s))
 
   if (live()) {
@@ -318,6 +439,8 @@ export async function updateStudent(studentId, formValues) {
 }
 
 export async function deleteStudent(studentId) {
+  const existing = cache.students.find((s) => s.id === studentId)
+  assertStudentInScope(existing)
   cache.students = cache.students.filter((s) => s.id !== studentId)
   if (live()) {
     await supabase.from(TABLE.students).delete().eq('id', studentId)
@@ -330,6 +453,8 @@ export async function deleteStudent(studentId) {
 // ---------------------------------------------------------------------------
 
 export function listTeachers() {
+  // A teacher must never see other teachers (or be able to tamper with them).
+  if (isTeacherContext()) return []
   return clone(cache.teachers)
 }
 
@@ -429,6 +554,7 @@ function nextTeacherTextId(ids) {
 }
 
 export async function createTeacher(formValues) {
+  assertAdminContext()
   const teacher = normalizeTeacherPermissions({
     ...formValues,
     username:
@@ -486,6 +612,7 @@ export async function createTeacher(formValues) {
 }
 
 export async function updateTeacher(teacherId, formValues) {
+  assertAdminContext()
   const updated = normalizeTeacherPermissions(formValues)
 
   /* No backend configured → in-memory only. */
@@ -514,6 +641,7 @@ export async function updateTeacher(teacherId, formValues) {
 }
 
 export async function deleteTeacher(teacherId) {
+  assertAdminContext()
   const target = cache.teachers.find((t) => t.id === teacherId)
 
   /* No backend configured → in-memory only. */
@@ -541,6 +669,7 @@ export async function deleteTeacher(teacherId) {
 
 /** Pulls every teacher row straight from the DB (no-op cache return offline). */
 export async function loadTeachers() {
+  assertAdminContext()
   if (!live()) return clone(cache.teachers)
   cache.teachers = await queryTeachersRows()
   return clone(cache.teachers)
@@ -563,9 +692,13 @@ async function queryTeachersRows() {
 /**
  * Fetches a single teacher by id. Prefers the live Supabase `teachers` table,
  * falling back to the in-memory cache only when the backend isn't configured.
+ * A logged-in teacher may only fetch THEIR OWN profile — never another
+ * teacher's record.
  */
 export async function getTeacherById(teacherId) {
   if (!teacherId) return null
+  const owner = currentOwner()
+  if (owner && owner.id !== teacherId) return null
   const cached = cache.teachers.find((t) => t.id === teacherId)
   if (!live()) return cached ? clone(cached) : null
   try {
@@ -598,19 +731,29 @@ export async function findTeacherByUsernamePassword(username, password) {
   )
   if (!live()) return cached ? clone(cached) : null
   try {
-    const { data, error } = await supabase
-      .from(TABLE.teachers)
-      .select('*')
-      .eq('username', normalizedUsername)
-      .eq('password', password)
-      .eq('status', 'Active')
-      .limit(1)
-      .maybeSingle()
-    if (!error && data) return clone(data)
+    // Preferred path: SECURITY DEFINER RPC — validates credentials and issues a
+    // fresh `session_token` server-side (never exposes the password column).
+    const { data, error } = await supabase.rpc('teacher_login', {
+      p_username: normalizedUsername,
+      p_password: password,
+    })
+    if (!error && data && data.length) return clone(rowToTeacher(data[0]))
+    // RPC not deployed yet → fall back to the legacy direct-table match.
+    if (error && (error.code === 'PGRST202' || error.code === '42883')) {
+      const { data: legacy, error: legacyError } = await supabase
+        .from(TABLE.teachers)
+        .select('*')
+        .eq('username', normalizedUsername)
+        .eq('password', password)
+        .eq('status', 'Active')
+        .limit(1)
+        .maybeSingle()
+      if (!legacyError && legacy) return clone(rowToTeacher(legacy))
+    }
+    return null
   } catch {
-    /* fall through to cache on a live query failure */
+    return cached ? clone(cached) : null
   }
-  return cached ? clone(cached) : null
 }
 
 // ---------------------------------------------------------------------------
@@ -618,10 +761,13 @@ export async function findTeacherByUsernamePassword(username, password) {
 // ---------------------------------------------------------------------------
 
 export function listSubjects() {
+  // Teacher dashboards never need the full subject catalog.
+  if (isTeacherContext()) return []
   return clone(cache.subjects)
 }
 
 export async function createSubject(name) {
+  assertAdminContext()
   const subject = {
     id: `SUB-${String(cache.subjects.length + 1).padStart(2, '0')}`,
     name,
@@ -638,6 +784,7 @@ export async function createSubject(name) {
 }
 
 export async function updateSubject(subjectId, name) {
+  assertAdminContext()
   cache.subjects = cache.subjects.map((s) => (s.id === subjectId ? { ...s, name } : s))
   if (live()) {
     await supabase.from(TABLE.subjects).update({ name }).eq('id', subjectId)
@@ -646,6 +793,7 @@ export async function updateSubject(subjectId, name) {
 }
 
 export async function deleteSubject(subjectId) {
+  assertAdminContext()
   cache.subjects = cache.subjects.filter((s) => s.id !== subjectId)
   if (live()) {
     await supabase.from(TABLE.subjects).delete().eq('id', subjectId)
@@ -766,6 +914,13 @@ function assertWithinPermissions(teacher, { subject, stage, grade }) {
 }
 
 export function listExams() {
+  const teacher = currentOwner()
+  if (teacher) {
+    // A teacher only ever reads their OWN exams within their granted scope.
+    return clone(
+      cache.exams.filter((e) => e.teacherId === teacher.id && examWithinPermissions(teacher, e))
+    )
+  }
   return clone(cache.exams)
 }
 
@@ -982,6 +1137,16 @@ export async function duplicateExam(examId) {
 // ---------------------------------------------------------------------------
 
 export function listExamAttempts() {
+  const teacher = currentOwner()
+  if (teacher) {
+    // A teacher only sees results submitted on their OWN in-scope exams.
+    const ownIds = new Set(
+      cache.exams
+        .filter((e) => e.teacherId === teacher.id && examWithinPermissions(teacher, e))
+        .map((e) => e.id)
+    )
+    return clone(cache.attempts.filter((a) => ownIds.has(a.examId)))
+  }
   return clone(cache.attempts)
 }
 
@@ -991,6 +1156,12 @@ export function listExamAttempts() {
  * enforce one attempt per student per exam.
  */
 export async function findExamAttempt(studentId, examId) {
+  // A teacher may only look at attempts on their own in-scope exams.
+  const teacher = currentOwner()
+  if (teacher) {
+    const exam = cache.exams.find((e) => e.id === examId)
+    if (!exam || exam.teacherId !== teacher.id || !examWithinPermissions(teacher, exam)) return null
+  }
   const cached = cache.attempts.find((a) => a.studentId === studentId && a.examId === examId)
   if (!live()) return cached ? clone(cached) : null
   try {
@@ -1001,7 +1172,7 @@ export async function findExamAttempt(studentId, examId) {
       .eq('exam_id', examId)
       .limit(1)
 .maybeSingle()
-    if (!error && data) return clone(rowToTeacher(data))
+    if (!error && data) return clone(rowToAttempt(data))
   } catch {
     /* fall through to cache on a live query failure */
   }
@@ -1010,6 +1181,14 @@ export async function findExamAttempt(studentId, examId) {
 
 /** Persists a completed exam attempt (already graded by the caller). */
 export async function createExamAttempt(attempt) {
+  // A teacher can only record results for their own in-scope exams.
+  const teacher = currentOwner()
+  if (teacher) {
+    const exam = cache.exams.find((e) => e.id === attempt?.examId)
+    if (!exam || exam.teacherId !== teacher.id || !examWithinPermissions(teacher, exam)) {
+      throw new Error('لا يمكنك تسجيل نتيجة على امتحان لا يخصك.')
+    }
+  }
   // One attempt per student per exam — never insert a duplicate.
   const existing = await findExamAttempt(attempt.studentId, attempt.examId)
   if (existing) {
@@ -1035,6 +1214,16 @@ export async function createExamAttempt(attempt) {
 }
 
 export async function deleteExamAttempt(attemptId) {
+  const target = cache.attempts.find((a) => a.id === attemptId)
+  if (target) {
+    const teacher = currentOwner()
+    if (teacher) {
+      const exam = cache.exams.find((e) => e.id === target.examId)
+      if (!exam || exam.teacherId !== teacher.id || !examWithinPermissions(teacher, exam)) {
+        throw new Error('لا يمكنك حذف نتيجة خارج امتحاناتك.')
+      }
+    }
+  }
   cache.attempts = cache.attempts.filter((a) => a.id !== attemptId)
   if (live()) {
     await supabase.from(TABLE.attempts).delete().eq('id', attemptId)
@@ -1047,10 +1236,12 @@ export async function deleteExamAttempt(attemptId) {
 // ---------------------------------------------------------------------------
 
 export function listClasses() {
+  if (isTeacherContext()) return []
   return clone(cache.classes)
 }
 
 export async function createClass(formValues) {
+  assertAdminContext()
   const cls = {
     ...formValues,
     id: `CLS-${String(cache.classes.length + 1).padStart(2, '0')}`,
@@ -1067,6 +1258,7 @@ export async function createClass(formValues) {
 }
 
 export async function updateClass(classId, formData) {
+  assertAdminContext()
   cache.classes = cache.classes.map((c) => (c.id === classId ? { ...c, ...formData } : c))
   if (live()) {
     await supabase.from(TABLE.classes).update(formData).eq('id', classId)
@@ -1075,6 +1267,7 @@ export async function updateClass(classId, formData) {
 }
 
 export async function deleteClass(classId) {
+  assertAdminContext()
   cache.classes = cache.classes.filter((c) => c.id !== classId)
   if (live()) {
     await supabase.from(TABLE.classes).delete().eq('id', classId)
@@ -1094,7 +1287,7 @@ const DEMO_TABLES = ['students', 'teachers', 'subjects', 'exams', 'attempts', 'c
    may have fewer columns, so inserts are stripped to the live column set. */
 const MODEL_COLUMNS = {
   students: ['id', 'name', 'stage', 'grade', 'parent_phone', 'status', 'password', 'parent_pin', 'created_at'],
-  teachers: ['id', 'name', 'subject', 'subjects', 'stages', 'grades', 'stage', 'grade', 'phone', 'status', 'username', 'password'],
+  teachers: ['id', 'name', 'subject', 'subjects', 'stages', 'grades', 'stage', 'grade', 'phone', 'status', 'username', 'password', 'session_token'],
   subjects: ['id', 'name', 'teachers_count', 'exams_count'],
   classes: ['id', 'name'],
   exams: ['id', 'name', 'subject', 'stage', 'grade', 'duration_minutes', 'status', 'created_at', 'scheduled_date', 'start_time', 'end_time', 'instructions', 'pass_score', 'archived', 'questions', 'teacher_id', 'teacher_name'],

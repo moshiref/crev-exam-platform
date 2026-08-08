@@ -110,7 +110,7 @@ export default function Students() {
             ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-40"
+            className="flex-1 sm:w-40 sm:flex-none"
           />
         </div>
       </div>

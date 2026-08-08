@@ -129,75 +129,150 @@ export default function Teachers() {
             }
           />
         ) : (
-          <div className="scrollbar-thin overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-right">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">اسم المدرس</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">المادة</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">اسم المستخدم</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">رقم الهاتف</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الحالة</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {teachers.map((teacher) => (
-                  <tr key={teacher.id} className="border-b border-slate-50 transition-colors hover:bg-slate-50/70">
-                    <td className="px-4 py-3.5 text-sm font-bold text-slate-800">{teacher.name}</td>
-                    <td className="px-4 py-3.5 text-sm font-medium text-slate-600">{Array.isArray(teacher.subjects) && teacher.subjects.length ? teacher.subjects.join('، ') : teacher.subject || '—'}</td>
-                    <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 font-mono text-xs font-semibold text-slate-600 ring-1 ring-slate-100" dir="ltr">
-                        <HiOutlineKey className="h-3.5 w-3.5 text-slate-400" />
-                        {teacher.username || '—'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 text-sm font-medium text-slate-600" dir="ltr">{teacher.phone}</td>
-                    <td className="px-4 py-3.5">
-                      <Badge tone={teacher.status === 'Active' ? 'success' : 'neutral'}>
-                        {teacher.status === 'Active' ? 'نشط' : 'غير نشط'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          title={teacher.status === 'Active' ? 'تعطيل الحساب' : 'تفعيل الحساب'}
-                          onClick={() => toggleStatus(teacher)}
-                          className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
-                            teacher.status === 'Active'
-                              ? 'text-slate-400 hover:bg-amber-50 hover:text-amber-600'
-                              : 'text-emerald-500 hover:bg-green-50'
-                          }`}
-                        >
-                          <HiOutlinePower className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          title="تعديل"
-                          onClick={() => openEditModal(teacher)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600"
-                        >
-                          <HiOutlinePencilSquare className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          title="حذف"
-                          onClick={() => {
-                            setTeacherToDelete(teacher)
-                            deleteDialog.open()
-                          }}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-danger"
-                        >
-                          <HiOutlineTrash className="h-4 w-4" />
-                        </button>
+          <>
+            {/* Mobile card list */}
+            <div className="divide-y divide-slate-100 sm:hidden">
+              {teachers.map((teacher) => (
+                <div key={teacher.id} className="flex flex-col gap-3 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                        {teacher.name.slice(0, 1)}
                       </div>
-                    </td>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-slate-800">{teacher.name}</p>
+                        <p className="truncate text-xs font-medium text-slate-500">
+                          {Array.isArray(teacher.subjects) && teacher.subjects.length ? teacher.subjects.join('، ') : teacher.subject || '—'}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge tone={teacher.status === 'Active' ? 'success' : 'neutral'}>
+                      {teacher.status === 'Active' ? 'نشط' : 'غير نشط'}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">اسم المستخدم</p>
+                      <p className="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-sm font-bold text-slate-800" dir="ltr">
+                        <HiOutlineKey className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <span className="truncate">{teacher.username || '—'}</span>
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">رقم الهاتف</p>
+                      <p className="mt-0.5 truncate text-sm font-bold text-slate-800" dir="ltr">{teacher.phone}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title={teacher.status === 'Active' ? 'تعطيل الحساب' : 'تفعيل الحساب'}
+                      onClick={() => toggleStatus(teacher)}
+                      className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
+                        teacher.status === 'Active'
+                          ? 'text-slate-400 hover:bg-amber-50 hover:text-amber-600'
+                          : 'text-emerald-500 hover:bg-green-50'
+                      }`}
+                    >
+                      <HiOutlinePower className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="تعديل"
+                      onClick={() => openEditModal(teacher)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600"
+                    >
+                      <HiOutlinePencilSquare className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="حذف"
+                      onClick={() => {
+                        setTeacherToDelete(teacher)
+                        deleteDialog.open()
+                      }}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-red-50 hover:text-danger"
+                    >
+                      <HiOutlineTrash className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop / tablet table */}
+            <div className="hidden scrollbar-thin overflow-x-auto sm:block">
+              <table className="w-full min-w-[860px] border-collapse text-right">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">اسم المدرس</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">المادة</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">اسم المستخدم</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">رقم الهاتف</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الحالة</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الإجراءات</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {teachers.map((teacher) => (
+                    <tr key={teacher.id} className="border-b border-slate-50 transition-colors hover:bg-slate-50/70">
+                      <td className="px-4 py-3.5 text-sm font-bold text-slate-800">{teacher.name}</td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-slate-600">{Array.isArray(teacher.subjects) && teacher.subjects.length ? teacher.subjects.join('، ') : teacher.subject || '—'}</td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 font-mono text-xs font-semibold text-slate-600 ring-1 ring-slate-100" dir="ltr">
+                          <HiOutlineKey className="h-3.5 w-3.5 text-slate-400" />
+                          {teacher.username || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-slate-600" dir="ltr">{teacher.phone}</td>
+                      <td className="px-4 py-3.5">
+                        <Badge tone={teacher.status === 'Active' ? 'success' : 'neutral'}>
+                          {teacher.status === 'Active' ? 'نشط' : 'غير نشط'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            title={teacher.status === 'Active' ? 'تعطيل الحساب' : 'تفعيل الحساب'}
+                            onClick={() => toggleStatus(teacher)}
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                              teacher.status === 'Active'
+                                ? 'text-slate-400 hover:bg-amber-50 hover:text-amber-600'
+                                : 'text-emerald-500 hover:bg-green-50'
+                            }`}
+                          >
+                            <HiOutlinePower className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="تعديل"
+                            onClick={() => openEditModal(teacher)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600"
+                          >
+                            <HiOutlinePencilSquare className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="حذف"
+                            onClick={() => {
+                              setTeacherToDelete(teacher)
+                              deleteDialog.open()
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-red-50 hover:text-danger"
+                          >
+                            <HiOutlineTrash className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -211,7 +286,7 @@ export default function Teachers() {
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
 
-          <div className="rounded-2xl bg-slate-50/70 p-4 ring-1 ring-slate-100">
+          <div className="rounded-2xl bg-slate-50/70 p-3 ring-1 ring-slate-100 sm:p-4">
             <p className="mb-3 text-xs font-extrabold uppercase tracking-wide text-slate-500">صلاحيات التدريس</p>
 
             <div>
@@ -344,7 +419,7 @@ export default function Teachers() {
             value={form.status}
             onChange={(e) => setForm({ ...form, status: e.target.value })}
           />
-          <div className="mt-2 flex gap-3">
+          <div className="mt-2 flex flex-col gap-3 sm:flex-row">
             <Button type="button" variant="outline" size="md" className="flex-1" onClick={formModal.close}>
               إلغاء
             </Button>

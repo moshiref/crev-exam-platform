@@ -51,6 +51,7 @@ alter table public.teachers add column if not exists password text not null defa
 alter table public.teachers add column if not exists subjects jsonb not null default '[]'::jsonb;
 alter table public.teachers add column if not exists stages   jsonb not null default '[]'::jsonb;
 alter table public.teachers add column if not exists grades   jsonb not null default '[]'::jsonb;
+alter table public.teachers add column if not exists session_token text not null default '';
 
 -- ---------------------------------------------------------------------------
 -- Subjects (teachers_count / exams_count are counts the app pre-computes)

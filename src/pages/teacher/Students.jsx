@@ -80,7 +80,7 @@ export default function Students() {
             ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-40"
+            className="flex-1 sm:w-40 sm:flex-none"
           />
         </div>
       </div>
@@ -91,72 +91,128 @@ export default function Students() {
             <p className="text-sm font-semibold text-slate-500">لا يوجد طلاب مطابقون لبحثك</p>
           </div>
         ) : (
-          <div className="scrollbar-thin overflow-x-auto">
-            <table className="w-full min-w-[900px] border-collapse text-right">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الطالب</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">كود الطالب</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الصف</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">هاتف ولي الأمر</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">كلمة المرور</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الحالة</th>
-                  <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {students.map((student, index) => (
-                  <motion.tr
-                    key={student.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.03 }}
-                    className="border-b border-slate-50 transition-colors hover:bg-slate-50/70"
-                  >
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-xs font-bold text-white">
-                          {student.name.slice(0, 1)}
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-800">{student.name}</p>
-                          {student.notes && <p className="max-w-[220px] truncate text-xs text-slate-400">{student.notes}</p>}
-                        </div>
+          <>
+            {/* Mobile card list */}
+            <div className="divide-y divide-slate-100 sm:hidden">
+              {students.map((student) => (
+                <div key={student.id} className="flex flex-col gap-3 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                        {student.name.slice(0, 1)}
                       </div>
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-sm font-bold text-slate-700" dir="ltr">
-                      {student.id}
-                    </td>
-                    <td className="px-4 py-3.5 text-sm font-medium text-slate-600">{student.grade}</td>
-                    <td className="px-4 py-3.5 text-sm font-medium text-slate-600" dir="ltr">
-                      {student.parentPhone}
-                    </td>
-                    <td className="px-4 py-3.5 font-mono text-sm font-medium text-slate-500" dir="ltr">
-                      {student.password}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <Badge tone={student.status === 'Active' ? 'success' : 'neutral'}>
-                        {student.status === 'Active' ? 'نشط' : 'غير نشط'}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-1">
-                        <RowBtn title="تعديل" className="hover:bg-amber-50 hover:text-amber-600" onClick={() => handleAction('edit', student)}>
-                          <HiOutlinePencilSquare className="h-4 w-4" />
-                        </RowBtn>
-                        <RowBtn title="طباعة البطاقة" className="hover:bg-indigo-50 hover:text-indigo-600" onClick={() => handleAction('print', student)}>
-                          <HiOutlinePrinter className="h-4 w-4" />
-                        </RowBtn>
-                        <RowBtn title="حذف" className="hover:bg-red-50 hover:text-danger" onClick={() => handleAction('delete', student)}>
-                          <HiOutlineTrash className="h-4 w-4" />
-                        </RowBtn>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-slate-800">{student.name}</p>
+                        {student.notes && <p className="truncate text-xs text-slate-400">{student.notes}</p>}
                       </div>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                    <Badge tone={student.status === 'Active' ? 'success' : 'neutral'}>
+                      {student.status === 'Active' ? 'نشط' : 'غير نشط'}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">كود الطالب</p>
+                      <p className="mt-0.5 truncate font-mono text-sm font-bold text-slate-800" dir="ltr">{student.id}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">الصف الدراسي</p>
+                      <p className="mt-0.5 truncate text-sm font-bold text-slate-800">{student.grade}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">هاتف ولي الأمر</p>
+                      <p className="mt-0.5 truncate text-sm font-bold text-slate-800" dir="ltr">{student.parentPhone}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">كلمة المرور</p>
+                      <p className="mt-0.5 truncate font-mono text-sm font-bold text-slate-800" dir="ltr">{student.password}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <RowBtn title="تعديل" className="h-10 w-10 rounded-xl hover:bg-amber-50 hover:text-amber-600" onClick={() => handleAction('edit', student)}>
+                      <HiOutlinePencilSquare className="h-5 w-5" />
+                    </RowBtn>
+                    <RowBtn title="طباعة البطاقة" className="h-10 w-10 rounded-xl hover:bg-indigo-50 hover:text-indigo-600" onClick={() => handleAction('print', student)}>
+                      <HiOutlinePrinter className="h-5 w-5" />
+                    </RowBtn>
+                    <RowBtn title="حذف" className="h-10 w-10 rounded-xl hover:bg-red-50 hover:text-danger" onClick={() => handleAction('delete', student)}>
+                      <HiOutlineTrash className="h-5 w-5" />
+                    </RowBtn>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop / tablet table */}
+            <div className="hidden scrollbar-thin overflow-x-auto sm:block">
+              <table className="w-full min-w-[900px] border-collapse text-right">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الطالب</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">كود الطالب</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الصف</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">هاتف ولي الأمر</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">كلمة المرور</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الحالة</th>
+                    <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الإجراءات</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((student, index) => (
+                    <motion.tr
+                      key={student.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.03 }}
+                      className="border-b border-slate-50 transition-colors hover:bg-slate-50/70"
+                    >
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-xs font-bold text-white">
+                            {student.name.slice(0, 1)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-800">{student.name}</p>
+                            {student.notes && <p className="max-w-[220px] truncate text-xs text-slate-400">{student.notes}</p>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 font-mono text-sm font-bold text-slate-700" dir="ltr">
+                        {student.id}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-slate-600">{student.grade}</td>
+                      <td className="px-4 py-3.5 text-sm font-medium text-slate-600" dir="ltr">
+                        {student.parentPhone}
+                      </td>
+                      <td className="px-4 py-3.5 font-mono text-sm font-medium text-slate-500" dir="ltr">
+                        {student.password}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge tone={student.status === 'Active' ? 'success' : 'neutral'}>
+                          {student.status === 'Active' ? 'نشط' : 'غير نشط'}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1">
+                          <RowBtn title="تعديل" className="h-8 w-8 rounded-lg hover:bg-amber-50 hover:text-amber-600" onClick={() => handleAction('edit', student)}>
+                            <HiOutlinePencilSquare className="h-4 w-4" />
+                          </RowBtn>
+                          <RowBtn title="طباعة البطاقة" className="h-8 w-8 rounded-lg hover:bg-indigo-50 hover:text-indigo-600" onClick={() => handleAction('print', student)}>
+                            <HiOutlinePrinter className="h-4 w-4" />
+                          </RowBtn>
+                          <RowBtn title="حذف" className="h-8 w-8 rounded-lg hover:bg-red-50 hover:text-danger" onClick={() => handleAction('delete', student)}>
+                            <HiOutlineTrash className="h-4 w-4" />
+                          </RowBtn>
+                        </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -196,7 +252,7 @@ function RowBtn({ title, className, onClick, children }) {
       type="button"
       title={title}
       onClick={onClick}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors duration-150 ${className}`}
+      className={`flex items-center justify-center text-slate-400 transition-colors duration-150 ${className}`}
     >
       {children}
     </button>

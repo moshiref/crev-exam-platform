@@ -160,11 +160,16 @@ export function createDemoDataset() {
     examsCount: 0,
   }))
 
-  // Teachers (5)
+  // Teachers (5) — each gets full stage/grade permission scope (as the admin
+  // would grant), so the strict RBAC scoping still shows data in the demo.
+  const allGrades = Object.values(GRADES_BY_STAGE).flat()
   const teachers = TEACHER_DATA.map((t, i) => ({
     id: `T-${String(i + 1).padStart(3, '0')}`,
     name: t.name,
     subject: t.subject,
+    subjects: [t.subject],
+    stages: [...EDUCATIONAL_STAGES],
+    grades: allGrades,
     phone: `010${randInt(10000000, 99999999)}`,
     status: i === 3 ? 'Inactive' : 'Active',
     username: t.username,

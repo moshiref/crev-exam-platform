@@ -11,7 +11,7 @@ export default function EmptyState({ icon, title, description, action, className
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/40 px-6 py-14 text-center ${className}`}
+      className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/40 px-4 py-10 text-center sm:px-6 sm:py-14 ${className}`}
     >
       {icon && (
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 text-3xl text-primary ring-1 ring-primary/10">

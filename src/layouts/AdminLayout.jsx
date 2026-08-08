@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/layout/Sidebar.jsx'
 import Header from '../components/layout/Header.jsx'
 import { useDisclosure } from '../hooks/useDisclosure.js'
-import { isAdminAuthenticated, logoutAdmin } from '../services/auth.js'
+import { isAdminAuthenticated, isTeacherAuthenticated, logoutAdmin } from '../services/auth.js'
 
 // Maps each admin route to the title shown in the Header.
 const PAGE_TITLES = {
@@ -36,7 +36,11 @@ export default function AdminLayout() {
   }
 
   useEffect(() => {
-    if (!isAdminAuthenticated()) {
+    // A teacher account is confined to the teacher dashboard — even typing
+    // an /admin/* URL just sends them back to their own dashboard.
+    if (isTeacherAuthenticated()) {
+      navigate('/teacher/dashboard', { replace: true })
+    } else if (!isAdminAuthenticated()) {
       navigate('/admin/login', { replace: true })
     }
   }, [navigate])

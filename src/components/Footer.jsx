@@ -16,12 +16,12 @@ export default function Footer() {
             <HiOutlineAcademicCap className="h-5 w-5" />
           </span>
           <span className="font-display text-base font-extrabold text-slate-900">
-            CREV Exam Platform
+            منصة التميز
           </span>
         </div>
 
         <p className="text-sm text-slate-400">
-          © {year} CREV Exam Platform. جميع الحقوق محفوظة.
+          © {year} منصة التميز. جميع الحقوق محفوظة.
         </p>
       </div>
     </footer>

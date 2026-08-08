@@ -4,7 +4,7 @@
 > Read this first before making any change so you can continue where the last
 > developer left off.
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 ---
 
@@ -189,3 +189,46 @@ schema changes require the Supabase dashboard (no service-role key in this repo)
 - **No UI/design changes.**
 - **No new features** beyond the requested fixes.
 - Keep **minimal edits** and preserve all existing features.
+
+---
+
+## 10. Teacher RBAC (permissions enforcement) — 2026-08-08
+
+Goal: a teacher only ever sees/manages data inside the scope the admin grants
+(subjects / stages / grades), even against crafted URLs or raw API requests.
+Enforced at BOTH the data layer and the database, not just hidden in the UI.
+
+### Database (`supabase/rbac_teacher.sql` — run AFTER `schema.sql`)
+- New `teachers.session_token` column.
+- `teacher_login` — SECURITY DEFINER login RPC (validates credentials, rotates
+  `session_token`, never exposes the password column).
+- `teacher_scoped_students` / `teacher_scoped_exams` / `teacher_scoped_attempts`
+  — SECURITY DEFINER read RPCs. Each verifies the session token (unforgeable
+  identity) and re-reads the teacher's OWN admin-defined permissions from the
+  `teachers` table, filtering the rows in SQL. Passing another teacher's id
+  returns NOTHING.
+
+### Data layer (`src/services/repository.js`)
+- When a teacher is logged in, `hydrateAll` fetches ONLY scoped rows via the
+  RPCs (out-of-scope data never reaches the browser cache).
+- `listStudents`/`listExams`/`listExamAttempts` are teacher-scoped; a teacher
+  also gets `[]` from `listTeachers`/`listSubjects`/`listClasses`.
+- Admin-only mutations (`createTeacher`/`updateTeacher`/`deleteTeacher`,
+  subject & class CRUD, `createStudent`, `loadTeachers`) now throw for a
+  teacher context (`assertAdminContext`), so a teacher cannot change their own
+  permissions or reach other teachers even via a crafted call.
+- Student edit/delete (`assertStudentInScope`) and attempt create/delete are
+  scope-checked; `getTeacherById` returns only the caller's own profile.
+
+### Routing (RBAC on routes)
+- New `src/components/auth/RouteGuard.jsx`: `RequireTeacher` (teacher routes)
+  and `BlockTeacher` (student/parent/admin-login routes redirect a logged-in
+  teacher to their own dashboard).
+- `AdminLayout` now sends a logged-in teacher back to `/teacher/dashboard`
+  instead of the admin login page.
+
+### To deploy
+Run `supabase/schema.sql` then `supabase/rbac_teacher.sql` in the Supabase SQL
+editor. Until the RPCs exist the app falls back to full-table loads with
+JS-side scoping (works, weaker). After deploying, teachers must log in again
+so their session carries the new `session_token`.

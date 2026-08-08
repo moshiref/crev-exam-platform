@@ -78,7 +78,7 @@ export default function Hero() {
           transition={{ duration: 0.5 }}
           className="inline-block rounded-full bg-blue-50 px-4 py-1.5 text-xs font-bold text-primary ring-1 ring-blue-100 sm:text-sm"
         >
-          منصة CREV التعليمية
+          منصة التميز
         </motion.span>
 
         <motion.h1

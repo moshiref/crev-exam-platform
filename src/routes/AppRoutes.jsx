@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { RequireTeacher, BlockTeacher } from '../components/auth/RouteGuard.jsx'
 
 /**
  * Public pages load eagerly; admin/dashboard routes are lazy-loaded so the
@@ -54,12 +55,12 @@ export default function AppRoutes() {
     >
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/teacher" element={<TeacherLogin />} />
-        <Route path="/student" element={<StudentLogin />} />
-        <Route path="/student/dashboard" element={<StudentDashboard />} />
-        <Route path="/student/exam/:examId" element={<StudentExamPage />} />
-        <Route path="/parent" element={<ParentLogin />} />
-        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/teacher" element={<BlockTeacher><TeacherLogin /></BlockTeacher>} />
+        <Route path="/student" element={<BlockTeacher><StudentLogin /></BlockTeacher>} />
+        <Route path="/student/dashboard" element={<BlockTeacher><StudentDashboard /></BlockTeacher>} />
+        <Route path="/student/exam/:examId" element={<BlockTeacher><StudentExamPage /></BlockTeacher>} />
+        <Route path="/parent" element={<BlockTeacher><ParentLogin /></BlockTeacher>} />
+        <Route path="/admin/login" element={<BlockTeacher><AdminLogin /></BlockTeacher>} />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="dashboard" replace />} />
@@ -76,7 +77,7 @@ export default function AppRoutes() {
         </Route>
 
         {/* Teacher dashboard — its own layout, separate from /admin/* */}
-        <Route element={<TeacherLayout />}>
+        <Route element={<RequireTeacher><TeacherLayout /></RequireTeacher>}>
           <Route path="/teacher/dashboard" element={<TeacherHome />} />
           <Route path="/teacher/exams" element={<TeacherExams />} />
           <Route path="/teacher/exams/take/:examId" element={<TeacherExamTake />} />
