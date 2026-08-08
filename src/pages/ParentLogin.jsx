@@ -25,6 +25,7 @@ import StatsCard from '../components/ui/StatsCard.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 import { isSupabaseConfigured, supabase } from '../services/supabase.js'
 import * as repo from '../services/repository.js'
+import { clearOtherSessions } from '../services/auth.js'
 import { useStudents } from '../hooks/useStudents.js'
 import { useExams } from '../hooks/useExams.js'
 import { useExamAttempts } from '../hooks/useExamAttempts.js'
@@ -103,21 +104,15 @@ export default function ParentLogin() {
 
   async function authenticate(code) {
     if (isSupabaseConfigured) {
-      // The PIN check runs in a SECURITY DEFINER RPC (so the anon key never
-      // reads `parent_pin` directly). Fall back to the legacy direct table
-      // match only while the RPC hasn't been deployed yet.
-      const { data, error } = await supabase.rpc('parent_login', { p_pin: code })
-      if (!error) return data && data.length === 1 ? data[0] : null
-      if (error.code === 'PGRST202' || error.code === '42883') {
-        const { data: legacy } = await supabase
-          .from('students')
-          .select('id, name, stage, grade, status, parent_phone, parent_pin')
-          .eq('parent_pin', code)
-          .eq('status', 'Active')
-        if (legacy && legacy.length === 1) return legacy[0]
-        return null
-      }
-      return null
+      // The `parent_login` RPC isn't deployed on this project yet (causing a
+      // 404), so the PIN check runs directly against the students table — the
+      // same query that previously succeeded as the legacy fallback.
+      const { data } = await supabase
+        .from('students')
+        .select('id, name, stage, grade, status, parent_phone, parent_pin')
+        .eq('parent_pin', code)
+        .eq('status', 'Active')
+      return data && data.length === 1 ? data[0] : null
     }
     const matches = repo.listStudents().filter((s) => s.status === 'Active' && String(s.parentPin) === code)
     return matches.length === 1 ? matches[0] : null
@@ -149,6 +144,7 @@ export default function ParentLogin() {
         status: student.status,
         parentPhone: student.parentPhone ?? student.parent_phone,
       }
+      clearOtherSessions(SESSION_KEY)
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(payload))
       setSession(payload)
     } finally {

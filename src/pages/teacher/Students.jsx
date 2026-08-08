@@ -95,13 +95,13 @@ export default function Students() {
             {/* Mobile card list */}
             <div className="divide-y divide-slate-100 sm:hidden">
               {students.map((student) => (
-                <div key={student.id} className="flex flex-col gap-3 py-4">
+                <div key={student.id} className="flex min-w-0 flex-col gap-3 py-4">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
                         {student.name.slice(0, 1)}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-bold text-slate-800">{student.name}</p>
                         {student.notes && <p className="truncate text-xs text-slate-400">{student.notes}</p>}
                       </div>
@@ -111,7 +111,7 @@ export default function Students() {
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                  <div className="grid w-full grid-cols-1 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100 min-[350px]:grid-cols-2">
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">كود الطالب</p>
                       <p className="mt-0.5 truncate font-mono text-sm font-bold text-slate-800" dir="ltr">{student.id}</p>
@@ -131,13 +131,13 @@ export default function Students() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <RowBtn title="تعديل" className="h-10 w-10 rounded-xl hover:bg-amber-50 hover:text-amber-600" onClick={() => handleAction('edit', student)}>
+                    <RowBtn title="تعديل" className="h-11 w-11 shrink-0 rounded-xl hover:bg-amber-50 hover:text-amber-600" onClick={() => handleAction('edit', student)}>
                       <HiOutlinePencilSquare className="h-5 w-5" />
                     </RowBtn>
-                    <RowBtn title="طباعة البطاقة" className="h-10 w-10 rounded-xl hover:bg-indigo-50 hover:text-indigo-600" onClick={() => handleAction('print', student)}>
+                    <RowBtn title="طباعة البطاقة" className="h-11 w-11 shrink-0 rounded-xl hover:bg-indigo-50 hover:text-indigo-600" onClick={() => handleAction('print', student)}>
                       <HiOutlinePrinter className="h-5 w-5" />
                     </RowBtn>
-                    <RowBtn title="حذف" className="h-10 w-10 rounded-xl hover:bg-red-50 hover:text-danger" onClick={() => handleAction('delete', student)}>
+                    <RowBtn title="حذف" className="h-11 w-11 shrink-0 rounded-xl hover:bg-red-50 hover:text-danger" onClick={() => handleAction('delete', student)}>
                       <HiOutlineTrash className="h-5 w-5" />
                     </RowBtn>
                   </div>

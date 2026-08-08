@@ -128,9 +128,9 @@ const examToRow = (exam) => ({
   teacher_id: exam.teacherId || '',
   teacher_name: exam.teacherName || '',
   questions: exam.questions ?? [],
-  scheduled_date: exam.scheduledDate ?? '',
-  start_time: exam.startTime ?? '',
-  end_time: exam.endTime ?? '',
+  scheduled_date: exam.scheduledDate || null,
+  start_time: exam.startTime || null,
+  end_time: exam.endTime || null,
   instructions: exam.instructions ?? '',
   pass_score: exam.passScore ?? 0,
   archived: exam.archived ?? false,
@@ -465,13 +465,10 @@ export function listTeachers() {
  * with screens that still expect a single subject string.
  */
 function normalizeTeacherPermissions(values) {
-  const subjects = Array.isArray(values.subjects)
-    ? values.subjects.filter(Boolean)
-    : values.subject
-      ? [values.subject]
-      : []
-  const stages = Array.isArray(values.stages) ? values.stages.filter(Boolean) : []
-  const grades = Array.isArray(values.grades) ? values.grades.filter(Boolean) : []
+  const subjects = parsePermissionList(values.subjects)
+  const stages = parsePermissionList(values.stages)
+  const grades = parsePermissionList(values.grades)
+  if (!subjects.length && values.subject) subjects.push(String(values.subject).trim())
   return {
     ...values,
     subjects,
@@ -482,25 +479,90 @@ function normalizeTeacherPermissions(values) {
 }
 
 /**
- * Parses a persisted permission value (array, JSON string, or comma-separated
- * string) into a clean string array — never undefined.
+ * Tries to decode a JSON-encoded value (array or string). Returns a decoded
+ * array of items, or null when the input is not decodable JSON. Handles the
+ * legacy corruption pattern where a JSON array is stored inside a string
+ * element, e.g. `["[\"الرياضيات\"]"]` → unwraps to `["الرياضيات"]`.
  */
-function parseList(value) {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean)
-  if (typeof value === 'string') {
+function unwrapJson(input) {
+  if (typeof input !== 'string') return null
+  let s = input.trim()
+  if (!s) return null
+  if (s.startsWith("'") && s.endsWith("'")) s = s.slice(1, -1).trim()
+  if (!s.startsWith('[') && !s.startsWith('"')) return null
+  try {
+    const parsed = JSON.parse(s)
+    if (Array.isArray(parsed)) return parsed
+    if (typeof parsed === 'string') {
+      const inner = parsePermissionList(parsed)
+      return inner.length ? inner : [parsed]
+    }
+  } catch {
+    /* not JSON — treat as a plain value below */
+  }
+  return null
+}
+
+/**
+ * Central permission parser. Turns ANY persisted value into a clean array of
+ * trimmed strings — never undefined. It handles:
+ *   - a real array            `["الرياضيات"]`
+ *   - a JSON string           `"[\"الرياضيات\"]"` (jsonb string / text JSON)
+ *   - a doubly-encoded value  `["[\"الرياضيات\"]"]` → `["الرياضيات"]`
+ *   - a quoted plain value    `"الرياضيات"` → `["الرياضيات"]`
+ *   - a comma-separated list  `"الرياضيات،العلوم"` (ASCII or Arabic comma)
+ *
+ * Original text is preserved — values are never lowercased or rewritten.
+ * Duplicates are removed. Used by every read AND write path so old corrupt
+ * rows and newly saved rows converge on the same clean array shape.
+ */
+export function parsePermissionList(value) {
+  const out = []
+  const seen = new Set()
+  const add = (item) => {
+    let s = String(item).trim()
+    if (!s) return
+    if (s.startsWith("'") && s.endsWith("'")) s = s.slice(1, -1).trim()
+    if (!s) return
+    const unwrapped = unwrapJson(s)
+    if (unwrapped) {
+      for (const sub of unwrapped) add(sub)
+      return
+    }
+    if (seen.has(s)) return
+    seen.add(s)
+    out.push(s)
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) add(item)
+  } else if (typeof value === 'string') {
     const trimmed = value.trim()
-    if (!trimmed) return []
-    if (trimmed.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(trimmed)
-        if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean)
-      } catch {
-        /* not JSON — fall through to comma split */
+    if (!trimmed) return out
+    if (trimmed.startsWith('[') || trimmed.startsWith('"') || trimmed.startsWith("'")) {
+      const unwrapped = unwrapJson(trimmed)
+      if (unwrapped) {
+        for (const sub of unwrapped) add(sub)
+        return out
       }
     }
-    return trimmed.split(',').map((s) => s.trim()).filter(Boolean)
+    for (const part of trimmed.split(/[،,]/)) {
+      const s = part.trim()
+      if (s && !seen.has(s)) {
+        seen.add(s)
+        out.push(s)
+      }
+    }
   }
-  return []
+  return out
+}
+
+/**
+ * Parses a persisted permission value (array, JSON string, doubly-encoded
+ * JSON, or comma-separated string) into a clean string array — never
+ * undefined. Delegates to the central `parsePermissionList`.
+ */
+function parseList(value) {
+  return parsePermissionList(value)
 }
 
 /** DB/BE row → React object: permission columns become real arrays. */
@@ -515,15 +577,35 @@ function rowToTeacher(row) {
   }
 }
 
-/** React object → DB/BE row: permission arrays persisted (JSON) so they survive. */
+/**
+ * THE single, shared way to read a teacher's teaching permissions. Given a
+ * teacher object (from the DB, cache or session) it returns clean arrays:
+ *   `{ subject, subjects, stages, grades }`
+ * Legacy values — real arrays, JSON strings, doubly-encoded JSON, or
+ * comma-separated text — are all normalized through the central parser, so no
+ * page can ever display raw JSON or diverge in how it reads permissions.
+ */
+export function getTeacherPermissions(teacher) {
+  const subjects = parsePermissionList(teacher?.subjects)
+  return {
+    subject: teacher?.subject || subjects[0] || '',
+    subjects: subjects.length ? subjects : parsePermissionList(teacher?.subject),
+    stages: parsePermissionList(teacher?.stages),
+    grades: parsePermissionList(teacher?.grades),
+  }
+}
+
+/** React object → DB/BE row: permission arrays persisted as REAL JSON arrays
+ *  (jsonb) / JSON text (text columns) so they survive round-trips without
+ *  ever being stored as a string inside an array. */
 function teacherToRow(teacher) {
   const { subjects, stages, grades } = normalizeTeacherPermissions(teacher)
   return {
     ...teacher,
     subject: teacher.subject || subjects[0] || '',
-    subjects: JSON.stringify(subjects),
-    stages: JSON.stringify(stages),
-    grades: JSON.stringify(grades),
+    subjects,
+    stages,
+    grades,
   }
 }
 
@@ -700,7 +782,7 @@ export async function getTeacherById(teacherId) {
   const owner = currentOwner()
   if (owner && owner.id !== teacherId) return null
   const cached = cache.teachers.find((t) => t.id === teacherId)
-  if (!live()) return cached ? clone(cached) : null
+  if (!live()) return cached ? clone(rowToTeacher(cached)) : null
   try {
     // Select only columns that actually exist (older DBs may lack the newer
     // permission columns) — avoids a 400 and keeps both schemas working.
@@ -717,11 +799,13 @@ export async function getTeacherById(teacherId) {
       .eq('id', teacherId)
       .limit(1)
       .maybeSingle()
-    if (!error && data) return clone(data)
+    // Map through rowToTeacher so the permission columns arrive as clean
+    // arrays even when the DB stores jsonb strings / double-encoded values.
+    if (!error && data) return clone(rowToTeacher(data))
   } catch {
     /* fall through to cache on a live query failure */
   }
-  return cached ? clone(cached) : null
+  return cached ? clone(rowToTeacher(cached)) : null
 }
 
 export async function findTeacherByUsernamePassword(username, password) {
@@ -842,24 +926,12 @@ function normal(v) {
 }
 
 /** Always returns a real Array from an input that may be an Array, a JSON
- *  string (e.g. `["عربي","رياضيات"]`), a plain string, null or undefined. */
+ *  string (e.g. `["عربي","رياضيات"]`), a doubly-encoded JSON value
+ *  (`["[\"رياضيات\"]"]`), a plain string, null or undefined. Values are
+ *  normalized for case-insensitive matching (display reads use
+ *  `parsePermissionList`, which preserves the original text). */
 function asList(list) {
-  if (Array.isArray(list)) return list.map((i) => normal(i)).filter(Boolean)
-  if (typeof list === 'string') {
-    const trimmed = list.trim()
-    if (!trimmed) return []
-    if (trimmed.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(trimmed)
-        if (Array.isArray(parsed)) return parsed.map((i) => normal(i)).filter(Boolean)
-      } catch {
-        /* not JSON — treat as a single comma-separated value below */
-      }
-      return trimmed.split(',').map((s) => normal(s)).filter(Boolean)
-    }
-    return trimmed.split(',').map((s) => normal(s)).filter(Boolean)
-  }
-  return []
+  return parsePermissionList(list).map((i) => normal(i)).filter(Boolean)
 }
 
 /** case-insensitive, trimmed membership test. Robust to any list type. */
@@ -1001,6 +1073,8 @@ export async function createExam(examData) {
     try {
       const cols = await liveColumns('exams')
       const row = stripToRows([examToRow(exam)], cols)[0]
+      row.start_time = row.start_time?.trim() || null
+      row.end_time = row.end_time?.trim() || null
       /* eslint-disable-next-line no-console */
       console.log('Exam payload:', row)
       const { data, error } = await supabase.from(TABLE.exams).insert(row).select()
@@ -1067,6 +1141,8 @@ export async function updateExam(examId, examData) {
     try {
       const cols = await liveColumns('exams')
       const row = stripToRows([examToRow(merged)], cols)[0]
+      row.start_time = row.start_time?.trim() || null
+      row.end_time = row.end_time?.trim() || null
       /* eslint-disable-next-line no-console */
       console.log('Exam payload (update):', row)
       const { error } = await supabase.from(TABLE.exams).update(row).eq('id', examId)

@@ -11,6 +11,7 @@ import Divider from '../components/auth/Divider.jsx'
 import { isSupabaseConfigured, supabase } from '../services/supabase.js'
 import * as repo from '../services/repository.js'
 import { loadRemembered, saveRemembered } from '../utils/rememberMe.js'
+import { clearOtherSessions } from '../services/auth.js'
 
 /**
  * Student login page — /student
@@ -52,6 +53,7 @@ export default function StudentLogin() {
         return
       }
 
+      clearOtherSessions('crev-student-auth')
       sessionStorage.setItem(
         'crev-student-auth',
         JSON.stringify({

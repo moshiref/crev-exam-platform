@@ -277,8 +277,88 @@ export default function Exams() {
             </p>
           </div>
         ) : (
-          <div className="scrollbar-thin overflow-x-auto">
-            <table className="w-full min-w-[1000px] border-collapse text-right">
+          <>
+            {/* Mobile exam cards */}
+            <div className="divide-y divide-slate-100 sm:hidden">
+              {pagedExams.map((exam) => (
+                <div key={exam.id} className="flex min-w-0 flex-col gap-3 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                        {exam.subject.slice(0, 1)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-slate-800">{exam.name}</p>
+                        <p className="truncate text-xs text-slate-400">{exam.subject} · {exam.grade} · {exam.questions.length} سؤال</p>
+                      </div>
+                    </div>
+                    <Badge tone={STATUS_TONE[exam.status] ?? 'neutral'}>
+                      {exam.status === 'Published' ? 'منشور' : 'مسودة'}
+                    </Badge>
+                  </div>
+
+                  <div className="grid w-full grid-cols-1 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100 min-[350px]:grid-cols-2">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">الدرجة الكلية</p>
+                      <p className="mt-0.5 truncate text-sm font-bold text-primary">{calcTotalScore(exam.questions)}</p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">درجة النجاح</p>
+                      <p className="mt-0.5 truncate text-sm font-bold text-slate-800">{exam.passScore || '—'}</p>
+                    </div>
+                    <div className="min-w-0 min-[350px]:col-span-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">الموعد</p>
+                      {exam.scheduledDate
+                        ? (
+                          <>
+                            <p className="mt-0.5 truncate text-sm font-bold text-slate-800">{formatDate(exam.scheduledDate)}</p>
+                            <p className="mt-0.5 truncate text-xs text-slate-400" dir="ltr">
+                              {exam.startTime || '—'} → {exam.endTime || '—'}
+                            </p>
+                          </>
+                        )
+                        : <p className="mt-0.5 text-sm font-bold text-slate-800">غير مجدول</p>}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CardBtn title="معاينة" className="hover:bg-blue-50 hover:text-primary" onClick={() => handleTableAction('view', exam)}>
+                      <HiOutlineEyeIcon />
+                    </CardBtn>
+                    <CardBtn title="تعديل" className="hover:bg-amber-50 hover:text-amber-600" onClick={() => handleTableAction('edit', exam)}>
+                      <HiOutlinePencilIcon />
+                    </CardBtn>
+                    {exam.status === 'Published'
+                      ? (
+                        <CardBtn title="إلغاء النشر" className="hover:bg-amber-50 hover:text-amber-600" onClick={() => handleTableAction('unpublish', exam)}>
+                          <HiOutlineStopIcon />
+                        </CardBtn>
+                      )
+                      : (
+                        <CardBtn title="نشر" className="hover:bg-green-50 hover:text-emerald-600" onClick={() => handleTableAction('publish', exam)}>
+                          <HiOutlineRocketIcon />
+                        </CardBtn>
+                      )}
+                    <CardBtn title="نسخ" className="hover:bg-indigo-50 hover:text-indigo-600" onClick={() => handleTableAction('copy', exam)}>
+                      <HiOutlineCopyIcon />
+                    </CardBtn>
+                    <CardBtn title={showArchived ? 'إلغاء الأرشفة' : 'أرشفة'} className="hover:bg-slate-100 hover:text-slate-700" onClick={() => handleTableAction(showArchived ? 'unarchive' : 'archive', exam)}>
+                      <HiOutlineArchiveBox />
+                    </CardBtn>
+                    <CardBtn title="بدء (محاكاة الطالب)" className="hover:bg-blue-50 hover:text-primary" onClick={() => handleTableAction('take', exam)}>
+                      <HiOutlinePlay />
+                    </CardBtn>
+                    <CardBtn title="حذف" className="hover:bg-red-50 hover:text-danger" onClick={() => handleTableAction('delete', exam)}>
+                      <HiOutlineTrashIcon />
+                    </CardBtn>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop / tablet table */}
+            <div className="hidden scrollbar-thin overflow-x-auto sm:block">
+              <table className="w-full min-w-[1000px] border-collapse text-right">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الامتحان</th>
@@ -364,8 +444,9 @@ export default function Exams() {
                   </motion.tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
 
         {/* Pagination */}
@@ -423,6 +504,19 @@ function ActionBtn({ title, onClick, className, children }) {
       title={title}
       onClick={onClick}
       className={cn('flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors duration-150', className)}
+    >
+      <span className="text-base leading-none">{children}</span>
+    </button>
+  )
+}
+
+function CardBtn({ title, onClick, className, children }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors duration-150', className)}
     >
       <span className="text-base leading-none">{children}</span>
     </button>

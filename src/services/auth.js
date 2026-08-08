@@ -14,12 +14,33 @@ const DEMO_ADMIN = { username: 'admin', password: 'admin123' }
 
 const ADMIN_KEY = 'crev-admin-auth'
 const TEACHER_KEY = 'crev-teacher-auth'
+const STUDENT_KEY = 'crev-student-auth'
+const PARENT_KEY = 'crev-parent-auth'
+
+/** Removes every role session from sessionStorage — a complete logout. */
+export function clearAllSessions() {
+  ;[ADMIN_KEY, TEACHER_KEY, STUDENT_KEY, PARENT_KEY].forEach((key) =>
+    window.sessionStorage.removeItem(key)
+  )
+}
+
+/**
+ * Removes every role session EXCEPT `keepKey`. Used on login so an old
+ * teacher/admin/parent session can never force a different role into the
+ * wrong dashboard, and vice versa.
+ */
+export function clearOtherSessions(keepKey) {
+  ;[ADMIN_KEY, TEACHER_KEY, STUDENT_KEY, PARENT_KEY].forEach((key) => {
+    if (key !== keepKey) window.sessionStorage.removeItem(key)
+  })
+}
 
 export function verifyAdmin(username, password) {
   return username === DEMO_ADMIN.username && password === DEMO_ADMIN.password
 }
 
 export function loginAdmin() {
+  clearOtherSessions(ADMIN_KEY)
   window.sessionStorage.setItem(ADMIN_KEY, '1')
 }
 
@@ -28,11 +49,12 @@ export function isAdminAuthenticated() {
 }
 
 export function logoutAdmin() {
-  window.sessionStorage.removeItem(ADMIN_KEY)
+  clearAllSessions()
 }
 
 /** Stores the authenticated teacher account in sessionStorage. */
 export function loginTeacher(teacher) {
+  clearOtherSessions(TEACHER_KEY)
   window.sessionStorage.setItem(TEACHER_KEY, JSON.stringify(teacher ?? {}))
 }
 
@@ -51,5 +73,5 @@ export function getCurrentTeacher() {
 }
 
 export function logoutTeacher() {
-  window.sessionStorage.removeItem(TEACHER_KEY)
+  clearAllSessions()
 }

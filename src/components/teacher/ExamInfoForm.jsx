@@ -6,7 +6,7 @@ import Select from '../ui/Select.jsx'
 import Button from '../ui/Button.jsx'
 import { EDUCATIONAL_STAGES, EXAM_STATUSES } from '../../data/mockData.js'
 import { getCurrentTeacher } from '../../services/auth.js'
-import { getTeacherById } from '../../services/repository.js'
+import { getTeacherById, getTeacherPermissions } from '../../services/repository.js'
 import { stageOfGrade } from '../../utils/educationLevels.js'
 
 const EMPTY = {
@@ -24,39 +24,6 @@ const EMPTY = {
 }
 
 /**
- * Normalizes permission values into arrays. The DB columns may hold a real
- * array, a JSON string (e.g. '["رياضيات","علوم"]') or a comma-separated
- * string — convert whatever form it arrives in to a clean array, and drop
- * undefined / null / empty entries before use.
- */
-function toArray(value) {
-  if (Array.isArray(value)) return value.map(String).filter(Boolean)
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (!trimmed) return []
-    if (trimmed.startsWith('[')) {
-      try {
-        const parsed = JSON.parse(trimmed)
-        if (Array.isArray(parsed)) return parsed.map(String).filter(Boolean)
-      } catch {
-        /* not JSON — fall through to comma split */
-      }
-    }
-    return trimmed.split(',').map((s) => s.trim()).filter(Boolean)
-  }
-  return []
-}
-
-function teacherPermissions(teacher) {
-  const subjects = toArray(teacher?.subjects)
-  return {
-    subjects: subjects.length ? subjects : teacher?.subject ? teacher.subject.split(',').map((s) => s.trim()).filter(Boolean) : [],
-    stages: toArray(teacher?.stages),
-    grades: toArray(teacher?.grades),
-  }
-}
-
-/**
  * Step 1 of the teacher exam builder.
  * Basic details plus scheduling, instructions and the pass score threshold.
  * Subject / stage / grade come EXCLUSIVELY from the teacher's admin-defined
@@ -66,25 +33,20 @@ function teacherPermissions(teacher) {
 export default function ExamInfoForm({ isOpen, onClose, onSubmit, initialData }) {
   const sessionTeacher = getCurrentTeacher()
 
-  // temp dev logs — confirm the permission data arrives from the DB
-  console.log('Teacher permissions:', sessionTeacher)
-  console.log('Subjects:', sessionTeacher?.subjects)
-  console.log('Stages:', sessionTeacher?.stages)
-  console.log('Grades:', sessionTeacher?.grades)
+  const [perms, setPerms] = useState(() => getTeacherPermissions(sessionTeacher))
 
-  const [perms, setPerms] = useState(() => teacherPermissions(sessionTeacher))
-
-  // If the session lacks permissions (or they came back empty), fetch the
-  // teacher once from the DB so the lists are never built from empties.
+  // Always pull the latest permissions from the DB — the admin is the source
+  // of truth (teachers.subjects / stages / grades). The session can be stale
+  // (e.g. grades granted AFTER the teacher logged in), so relying only on the
+  // session leaves the grade list empty. `getTeacherById` maps the columns
+  // into clean arrays, so `grades` here are exactly what the admin saved.
   useEffect(() => {
     let active = true
     ;(async () => {
-      const hasData = perms.subjects.length || perms.stages.length || perms.grades.length
-      if (hasData || !sessionTeacher?.id) return
+      if (!sessionTeacher?.id) return
       const fetched = await getTeacherById(sessionTeacher.id)
-      if (!active) return
-      console.log('Fetched teacher from DB:', fetched)
-      if (fetched) setPerms(teacherPermissions(fetched))
+      if (!active || !fetched) return
+      setPerms(getTeacherPermissions(fetched))
     })()
     return () => {
       active = false
@@ -100,7 +62,14 @@ export default function ExamInfoForm({ isOpen, onClose, onSubmit, initialData })
   const [errors, setErrors] = useState({})
   const isEditMode = Boolean(initialData)
 
-  const gradeOptions = allowedGrades.filter((g) => stageOfGrade(g) === form.stage)
+  // Grades come EXCLUSIVELY from the admin-set `grades` (teachers.grades),
+  // filtered to the currently selected stage. If a grade can't be matched to a
+  // stage (e.g. custom names), fall back to the full allowed list so the field
+  // is never empty — the exact admin values are always shown.
+  const gradeOptions = (() => {
+    const forStage = allowedGrades.filter((g) => stageOfGrade(g) === form.stage)
+    return forStage.length ? forStage : allowedGrades
+  })()
   const lockSubject = allowedSubjects.length === 1
   const lockStage = allowedStages.length === 1
   const lockGrade = gradeOptions.length === 1
@@ -108,7 +77,8 @@ export default function ExamInfoForm({ isOpen, onClose, onSubmit, initialData })
   function buildInitial() {
     const subject = allowedSubjects.includes(initialData?.subject) ? initialData.subject : allowedSubjects[0] ?? ''
     const stage = allowedStages.includes(initialData?.stage) ? initialData.stage : allowedStages[0] ?? ''
-    const eligible = allowedGrades.filter((g) => stageOfGrade(g) === stage)
+    const forStage = allowedGrades.filter((g) => stageOfGrade(g) === stage)
+    const eligible = forStage.length ? forStage : allowedGrades
     const grade = eligible.includes(initialData?.grade) ? initialData.grade : eligible[0] ?? ''
     return { ...EMPTY, ...initialData, subject, stage, grade }
   }
@@ -127,12 +97,13 @@ export default function ExamInfoForm({ isOpen, onClose, onSubmit, initialData })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
 
-  // If permissions arrive late (async fetch) and nothing has been chosen yet,
-  // auto-fill the single/first allowed stage + grade ONCE — only when empty.
+  // If permissions arrive late (async fetch) and the stage or grade is still
+  // empty, auto-fill from the freshly-loaded admin permissions so the grade
+  // dropdown is never left empty.
   useEffect(() => {
-    if (!isOpen || form.stage) return
+    if (!isOpen) return
     setForm((prev) => {
-      if (prev.stage) return prev
+      if (prev.stage && prev.grade) return prev
       return buildInitial()
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -142,7 +113,8 @@ export default function ExamInfoForm({ isOpen, onClose, onSubmit, initialData })
     setForm((prev) => {
       const next = { ...prev, [field]: value }
       if (field === 'stage') {
-        const eligible = allowedGrades.filter((g) => stageOfGrade(g) === value)
+        const forStage = allowedGrades.filter((g) => stageOfGrade(g) === value)
+        const eligible = forStage.length ? forStage : allowedGrades
         next.grade = eligible.includes(prev.grade) ? prev.grade : (eligible[0] ?? '')
       }
       return next
