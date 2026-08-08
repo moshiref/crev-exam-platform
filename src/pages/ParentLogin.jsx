@@ -25,13 +25,13 @@ import StatsCard from '../components/ui/StatsCard.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 import { isSupabaseConfigured, supabase } from '../services/supabase.js'
 import * as repo from '../services/repository.js'
-import { clearOtherSessions } from '../services/auth.js'
+import { clearOtherSessions, PARENT_KEY } from '../services/auth.js'
 import { useStudents } from '../hooks/useStudents.js'
 import { useExams } from '../hooks/useExams.js'
 import { useExamAttempts } from '../hooks/useExamAttempts.js'
 import { formatDate, formatDateTime } from '../utils/formatters.js'
 
-const SESSION_KEY = 'crev-parent-auth'
+const SESSION_KEY = PARENT_KEY
 
 const EXAM_STATUS = {
   submitted: { tone: 'success', label: 'تم التسليم' },

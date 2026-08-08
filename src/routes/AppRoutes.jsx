@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { RequireTeacher, BlockTeacher } from '../components/auth/RouteGuard.jsx'
+import { RequireTeacher, RequireStudent, BlockTeacher } from '../components/auth/RouteGuard.jsx'
 
 /**
  * Public pages load eagerly; admin/dashboard routes are lazy-loaded so the
@@ -56,10 +56,10 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/teacher" element={<BlockTeacher><TeacherLogin /></BlockTeacher>} />
-        <Route path="/student" element={<BlockTeacher><StudentLogin /></BlockTeacher>} />
-        <Route path="/student/dashboard" element={<BlockTeacher><StudentDashboard /></BlockTeacher>} />
-        <Route path="/student/exam/:examId" element={<BlockTeacher><StudentExamPage /></BlockTeacher>} />
-        <Route path="/parent" element={<BlockTeacher><ParentLogin /></BlockTeacher>} />
+        <Route path="/student" element={<StudentLogin />} />
+        <Route path="/student/dashboard" element={<RequireStudent><StudentDashboard /></RequireStudent>} />
+        <Route path="/student/exam/:examId" element={<RequireStudent><StudentExamPage /></RequireStudent>} />
+        <Route path="/parent" element={<ParentLogin />} />
         <Route path="/admin/login" element={<BlockTeacher><AdminLogin /></BlockTeacher>} />
 
         <Route path="/admin" element={<AdminLayout />}>

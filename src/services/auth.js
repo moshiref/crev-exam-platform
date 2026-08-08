@@ -12,10 +12,10 @@
 
 const DEMO_ADMIN = { username: 'admin', password: 'admin123' }
 
-const ADMIN_KEY = 'crev-admin-auth'
-const TEACHER_KEY = 'crev-teacher-auth'
-const STUDENT_KEY = 'crev-student-auth'
-const PARENT_KEY = 'crev-parent-auth'
+export const ADMIN_KEY = 'crev-admin-auth'
+export const TEACHER_KEY = 'crev-teacher-auth'
+export const STUDENT_KEY = 'crev-student-auth'
+export const PARENT_KEY = 'crev-parent-auth'
 
 /** Removes every role session from sessionStorage — a complete logout. */
 export function clearAllSessions() {
@@ -72,6 +72,17 @@ export function getCurrentTeacher() {
   }
 }
 
+/** True only when a student session exists — never affected by other roles. */
+export function isStudentAuthenticated() {
+  return Boolean(window.sessionStorage.getItem(STUDENT_KEY))
+}
+
+/** True only when a parent session exists — never affected by other roles. */
+export function isParentAuthenticated() {
+  return Boolean(window.sessionStorage.getItem(PARENT_KEY))
+}
+
+/** Logs the teacher out by removing the teacher session only. */
 export function logoutTeacher() {
-  clearAllSessions()
+  window.sessionStorage.removeItem(TEACHER_KEY)
 }
