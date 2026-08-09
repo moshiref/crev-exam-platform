@@ -72,28 +72,34 @@ export default function StudentLogin() {
     }
   }
 
+  // The credential check should run in a SECURITY DEFINER RPC (so the anon key
+  // never reads `password` directly). The `student_login` RPC is not deployed to
+  // the anon role yet, so calling it logs a 404 in the console. Keep that path
+  // dormant until the RPC is live, then flip this flag to true and the RPC-first
+  // flow (with the PGRST202 fallback) resumes automatically.
+  const STUDENT_LOGIN_RPC_READY = false
+
   /** Matches a code/password against the students table (live) or cache (mock). */
   async function authenticate(id, enteredPassword) {
     if (isSupabaseConfigured) {
-      // The credential check runs in a SECURITY DEFINER RPC (so the anon key
-      // never reads `password` directly). Fall back to the legacy direct table
-      // match only while the RPC hasn't been deployed yet.
-      const { data, error } = await supabase.rpc('student_login', {
-        p_student_id: id,
-        p_password: enteredPassword,
-      })
-      if (!error) return (data && data.length ? data[0] : null) || null
-      if (error.code === 'PGRST202' || error.code === '42883') {
-        const { data: legacy } = await supabase
-          .from('students')
-          .select('id, name, stage, grade, parent_pin')
-          .eq('id', id)
-          .eq('password', enteredPassword)
-          .eq('status', 'Active')
-          .maybeSingle()
-        return legacy || null
+      if (STUDENT_LOGIN_RPC_READY) {
+        const { data, error } = await supabase.rpc('student_login', {
+          p_student_id: id,
+          p_password: enteredPassword,
+        })
+        if (!error) return (data && data.length ? data[0] : null) || null
+        // RPC exists but isn't exposed to anon yet → fall through to the legacy
+        // direct-table match. Any other error is a real failure.
+        if (error.code !== 'PGRST202' && error.code !== '42883') return null
       }
-      return null
+      const { data: legacy } = await supabase
+        .from('students')
+        .select('id, name, stage, grade, parent_pin')
+        .eq('id', id)
+        .eq('password', enteredPassword)
+        .eq('status', 'Active')
+        .maybeSingle()
+      return legacy || null
     }
     return (
       repo
