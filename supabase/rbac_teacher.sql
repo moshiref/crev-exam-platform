@@ -27,10 +27,8 @@
 --   * Permission columns (`subjects` / `stages` / `grades`) are parsed with a
 --     normalizer that handles BOTH real jsonb arrays (schema.sql) and the
 --     JSON-encoded text strings older DBs / the app actually store
---     (e.g. '["الرياضيات"]' as text OR as a jsonb string "[\"الرياضيات\"]",
---     including double-encoded values like '["[\"الرياضيات\"]"]').
---     Matching an empty / missing list means the teacher is "unrestricted"
---     for that dimension — same as the app's JS.
+--     (e.g. '["الرياضيات"]'). Matching an empty / missing list means the
+--     teacher is "unrestricted" for that dimension — same as the app's JS.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -42,12 +40,10 @@ alter table public.exams add column if not exists teacher_name   text not null d
 
 -- ---------------------------------------------------------------------------
 -- Normalizes a teacher permission value into a jsonb ARRAY:
---   NULL / '' / '[]'                     → '[]'        (empty → "unrestricted")
---   '["أ","ب"]' (text JSON)              → '["أ","ب"]'
---   real jsonb array (as text)           → the array
---   jsonb STRING (as text "[\"أ\"]")     → the decoded array
---   '["[\"أ\"]"]' (double-encoded)       → '["أ"]'     (unwraps nested arrays)
---   'أ,ب' or 'أ،ب' (plain CSV)           → '["أ","ب"]'
+--   NULL / '' / '[]'            → '[]'        (empty → "unrestricted")
+--   '["أ","ب"]' (text JSON)     → '["أ","ب"]'
+--   real jsonb array (as text)  → the array
+--   'أ,ب' (plain CSV)           → '["أ","ب"]'
 -- Malformed JSON falls back to '[]' instead of aborting the whole query.
 -- Not exposed via PostgREST (execute revoked below) — internal helper only.
 -- ---------------------------------------------------------------------------
@@ -58,50 +54,17 @@ immutable
 as $$
 declare
   v_trim text := btrim(coalesce(p_raw, ''));
-  v_json jsonb;
-  v_elem jsonb;
-  v_out  jsonb := '[]'::jsonb;
 begin
   if v_trim = '' then
     return '[]'::jsonb;
   end if;
-
-  -- Legacy single-quoted wrapping (e.g. '["أ"]' stored with literal quotes).
-  if left(v_trim, 1) = '''' then
-    v_trim := btrim(substr(v_trim, 2, greatest(length(v_trim) - 2, 0)));
-  end if;
-  if v_trim = '' then
-    return '[]'::jsonb;
-  end if;
-
-  -- JSON value (array or string). A jsonb STRING column surfaces as text WITH
-  -- surrounding quotes (e.g. "[\"الرياضيات\"]") — decode it here too.
-  if left(v_trim, 1) in ('[', '"') then
+  if left(v_trim, 1) = '[' then
     begin
-      v_json := v_trim::jsonb;
+      return v_trim::jsonb;
     exception when others then
-      v_json := null;
+      return '[]'::jsonb;
     end;
-    if v_json is not null then
-      if jsonb_typeof(v_json) = 'array' then
-        for v_elem in select * from jsonb_array_elements(v_json)
-        loop
-          if jsonb_typeof(v_elem) = 'string' then
-            -- The element may itself be JSON-encoded (double-encoding):
-            -- ["[\"الرياضيات\"]"] → ["الرياضيات"]
-            v_out := v_out || public._teacher_perm_values(v_elem #>> '{}');
-          end if;
-        end loop;
-        return v_out;
-      end if;
-      if jsonb_typeof(v_json) = 'string' then
-        return public._teacher_perm_values(v_json #>> '{}');
-      end if;
-    end if;
   end if;
-
-  -- Plain CSV (ASCII or Arabic comma).
-  v_trim := replace(v_trim, '،', ',');
   return to_jsonb(array_remove(string_to_array(v_trim, ','), ''));
 end;
 $$;

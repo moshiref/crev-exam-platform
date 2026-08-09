@@ -16,7 +16,7 @@
 // ============================================================================
 
 import { isSupabaseConfigured, supabase } from './supabase.js'
-import { getCurrentTeacher } from './auth.js'
+import { isAdminAuthenticated, getCurrentTeacher } from './auth.js'
 import { createDemoDataset } from '../data/demoData.js'
 import { generateNextExamId } from '../utils/examUtils.js'
 import {
@@ -385,9 +385,11 @@ function studentsWithinPermissions(teacher, students) {
   )
 }
 
-/** Throws when a logged-in teacher tries an admin-only mutation. */
+/** Throws when the caller is not acting as an admin. Uses the exact same
+ *  admin session (`admin_session`) that gates the Admin Dashboard, so a
+ *  leftover teacher session can never be mistaken for the current actor. */
 function assertAdminContext() {
-  if (isTeacherContext()) {
+  if (!isAdminAuthenticated()) {
     throw new Error('هذه العملية متاحة للإدارة فقط.')
   }
 }
@@ -635,13 +637,36 @@ function nextTeacherTextId(ids) {
   return `T-${String(n).padStart(3, '0')}`
 }
 
+/** Existing usernames on the live teachers table (or the cache when offline). */
+async function readTeacherUsernames() {
+  if (!live()) {
+    return new Set(cache.teachers.map((t) => t.username).filter(Boolean))
+  }
+  const { data, error } = await supabase.from(TABLE.teachers).select('username')
+  if (error || !data) return new Set()
+  return new Set(data.map((r) => r.username).filter(Boolean))
+}
+
+/** Returns `base` when free; otherwise appends a numeric suffix (`base2`,
+ *  `base3`, …) so the stored username is always unique — the live teachers
+ *  table enforces a UNIQUE constraint on `username`. */
+async function ensureUniqueUsername(base) {
+  const used = await readTeacherUsernames()
+  if (!base || !used.has(base)) return base
+  let n = 2
+  while (used.has(`${base}${n}`)) n += 1
+  return `${base}${n}`
+}
+
 export async function createTeacher(formValues) {
   assertAdminContext()
   const teacher = normalizeTeacherPermissions({
     ...formValues,
-    username:
+    username: await ensureUniqueUsername(
       formValues.username ||
-      formValues.name.trim().replace(/\s+/g, '.').toLowerCase() || `teacher${Date.now()}`,
+        formValues.name.trim().replace(/\s+/g, '.').toLowerCase() ||
+        `teacher${Date.now()}`
+    ),
     password: formValues.password || Math.random().toString(36).slice(2, 10),
     status: formValues.status || 'Active',
   })
@@ -1040,6 +1065,27 @@ export function canTeacherAccessExam(examId) {
 }
 
 /**
+ * The next free EX-### exam id, computed against the REAL exams table when
+ * live (merged with the local cache). A teacher's cache only holds their own
+ * scoped exams, so deriving the id from it alone can collide with another
+ * teacher's — or an admin-created — exam. Falls back to the cache alone in
+ * mock mode or on a live read failure.
+ */
+async function nextExamId() {
+  if (live()) {
+    try {
+      const { data } = await supabase.from(TABLE.exams).select('id')
+      const dbIds = (data || []).map((r) => r.id)
+      const allIds = [...new Set([...dbIds, ...cache.exams.map((e) => e.id)])].map((id) => ({ id }))
+      return generateNextExamId(allIds)
+    } catch {
+      /* fall back to cache-based generation below */
+    }
+  }
+  return generateNextExamId(cache.exams)
+}
+
+/**
  * Creates a new exam. The logged-in teacher is fixed as the owner — they
  * cannot choose a teacher — and `teacher_id` / `teacher_name` are filled in
  * automatically from the session. Admin-created exams carry no teacher.
@@ -1051,7 +1097,7 @@ export async function createExam(examData) {
   }
   const exam = {
     ...examData,
-    id: generateNextExamId(cache.exams),
+    id: await nextExamId(),
     teacherId: owner ? owner.id : (examData.teacherId ?? null),
     teacherName: owner ? owner.name : (examData.teacherName ?? null),
     createdAt: new Date().toISOString().slice(0, 10),
@@ -1071,46 +1117,63 @@ export async function createExam(examData) {
 
   if (live()) {
     try {
-      const cols = await liveColumns('exams')
-      const row = stripToRows([examToRow(exam)], cols)[0]
-      row.start_time = row.start_time?.trim() || null
-      row.end_time = row.end_time?.trim() || null
-      /* eslint-disable-next-line no-console */
-      console.log('Exam payload:', row)
-      const { data, error } = await supabase.from(TABLE.exams).insert(row).select()
-      /* eslint-disable-next-line no-console */
-      console.log('[createExam] insert response:', error ? `ERROR ${error.status}` : data)
-      if (error) {
+      let saved = null
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const cols = await liveColumns('exams')
+        const row = stripToRows([examToRow(exam)], cols)[0]
+        row.start_time = row.start_time?.trim() || null
+        row.end_time = row.end_time?.trim() || null
         /* eslint-disable-next-line no-console */
-        console.error('[createExam] insert error:', error)
+        console.log('Exam payload:', row)
+        const { data, error } = await supabase.from(TABLE.exams).insert(row).select()
         /* eslint-disable-next-line no-console */
-        console.error('[createExam] message:', error.message)
+        console.log('[createExam] insert response:', error ? `ERROR ${error.status}` : data)
+        if (error && error.code === '23505') {
+          // The EX-### collided with a real exam outside this browser's cache
+          // (another teacher, or one created after hydration). Regenerate a
+          // fresh id against the live table and retry — never reuse a used id.
+          const prevId = exam.id
+          exam.id = await nextExamId()
+          cache.exams = cache.exams.map((e) => (e.id === prevId ? exam : e))
+          continue
+        }
+        if (error) {
+          /* eslint-disable-next-line no-console */
+          console.error('[createExam] insert error:', error)
+          /* eslint-disable-next-line no-console */
+          console.error('[createExam] message:', error.message)
+          /* eslint-disable-next-line no-console */
+          console.error('[createExam] details:', error.details)
+          /* eslint-disable-next-line no-console */
+          console.error('[createExam] hint:', error.hint)
+          throw new Error(`فشل حفظ الامتحان: ${error.message || JSON.stringify(error)}`)
+        }
+        if (!data || !data[0]) {
+          /* eslint-disable-next-line no-console */
+          console.warn('[createExam] insert returned no row — exam NOT persisted in Supabase')
+          throw new Error('فشل حفظ الامتحان: لم يتم الحفظ في قاعدة البيانات.')
+        }
         /* eslint-disable-next-line no-console */
-        console.error('[createExam] details:', error.details)
-        /* eslint-disable-next-line no-console */
-        console.error('[createExam] hint:', error.hint)
-        throw new Error(`فشل حفظ الامتحان: ${error.message || JSON.stringify(error)}`)
+        console.log('[createExam] inserted exam teacher_id :', data[0].teacher_id, '(expecting', owner?.id, ')')
+        if (owner && data[0].teacher_id == null) {
+          /* eslint-disable-next-line no-console */
+          console.error('[createExam] «teacher_id» missing in returned row')
+          throw new Error('فشل ربط الامتحان بالمدرس: teacher_id غير موجود في قاعدة البيانات.')
+        }
+        if (owner && String(data[0].teacher_id) !== String(owner.id)) {
+          /* eslint-disable-next-line no-console */
+          console.error('[createExam] MISMATCH → saved', data[0].teacher_id, 'but current teacher id is', owner.id)
+          throw new Error(
+            'فشل ربط الامتحان بالمدرس: عدم تطابق teacher_id المخزّن مع معرف المدرس الحالي.'
+          )
+        }
+        saved = data[0]
+        break
       }
-      if (!data || !data[0]) {
-        /* eslint-disable-next-line no-console */
-        console.warn('[createExam] insert returned no row — exam NOT persisted in Supabase')
-        throw new Error('فشل حفظ الامتحان: لم يتم الحفظ في قاعدة البيانات.')
+      if (!saved) {
+        throw new Error('فشل حفظ الامتحان: تعذّر الحصول على معرف فريد للامتحان.')
       }
-      /* eslint-disable-next-line no-console */
-      console.log('[createExam] inserted exam teacher_id :', data[0].teacher_id, '(expecting', owner?.id, ')')
-      if (owner && data[0].teacher_id == null) {
-        /* eslint-disable-next-line no-console */
-        console.error('[createExam] «teacher_id» missing in returned row')
-        throw new Error('فشل ربط الامتحان بالمدرس: teacher_id غير موجود في قاعدة البيانات.')
-      }
-      if (owner && String(data[0].teacher_id) !== String(owner.id)) {
-        /* eslint-disable-next-line no-console */
-        console.error('[createExam] MISMATCH → saved', data[0].teacher_id, 'but current teacher id is', owner.id)
-        throw new Error(
-          'فشل ربط الامتحان بالمدرس: عدم تطابق teacher_id المخزّن مع معرف المدرس الحالي.'
-        )
-      }
-      cache.exams = cache.exams.map((e) => (e.id === exam.id ? { ...e, ...rowToExam(data[0]) } : e))
+      cache.exams = cache.exams.map((e) => (e.id === exam.id ? { ...e, ...rowToExam(saved) } : e))
     } catch (err) {
       /* eslint-disable-next-line no-console */
       console.error('[createExam] failed to insert:', err)
@@ -1190,7 +1253,7 @@ export async function duplicateExam(examId) {
 
   const copy = {
     ...clone(source),
-    id: generateNextExamId(cache.exams),
+    id: await nextExamId(),
     name: `${source.name} (نسخة)`,
     status: 'Draft',
     createdAt: new Date().toISOString().slice(0, 10),

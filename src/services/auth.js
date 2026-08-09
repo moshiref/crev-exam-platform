@@ -12,8 +12,8 @@
 
 const DEMO_ADMIN = { username: 'admin', password: 'admin123' }
 
-export const ADMIN_KEY = 'crev-admin-auth'
-export const TEACHER_KEY = 'crev-teacher-auth'
+export const ADMIN_KEY = 'admin_session'
+export const TEACHER_KEY = 'teacher_session'
 export const STUDENT_KEY = 'crev-student-auth'
 export const PARENT_KEY = 'crev-parent-auth'
 
@@ -40,7 +40,6 @@ export function verifyAdmin(username, password) {
 }
 
 export function loginAdmin() {
-  clearOtherSessions(ADMIN_KEY)
   window.sessionStorage.setItem(ADMIN_KEY, '1')
 }
 
@@ -49,12 +48,11 @@ export function isAdminAuthenticated() {
 }
 
 export function logoutAdmin() {
-  clearAllSessions()
+  window.sessionStorage.removeItem(ADMIN_KEY)
 }
 
 /** Stores the authenticated teacher account in sessionStorage. */
 export function loginTeacher(teacher) {
-  clearOtherSessions(TEACHER_KEY)
   window.sessionStorage.setItem(TEACHER_KEY, JSON.stringify(teacher ?? {}))
 }
 
