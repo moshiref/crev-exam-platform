@@ -90,7 +90,7 @@ export default function Reports() {
           <h2 className="font-display text-xl font-extrabold text-slate-900 sm:text-2xl">التقارير</h2>
           <p className="mt-1 text-sm text-slate-500">تحليلات شاملة لتقييم أداء المنصة</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" icon={<HiOutlineArrowDownTray />} onClick={handleExportExcel}>
             تصدير Excel
           </Button>

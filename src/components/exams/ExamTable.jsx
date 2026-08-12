@@ -24,8 +24,11 @@ const STATUS_TONE = { Published: 'success', Draft: 'neutral' }
  * Exam roster table.
  * Columns: name, subject, stage, grade, question count, total marks,
  * duration, status, created date, actions.
- * Horizontally scrollable on narrow screens to keep column alignment —
- * matching the Stripe/Linear-style tables used across the dashboard.
+ * Mobile (<sm): a stacked card list so phones never have to swipe
+ * horizontally; each card surfaces the same info and actions.
+ * Desktop / tablet (sm+): the full table kept horizontally scrollable
+ * inside its own card on narrow widths — matching the Stripe/Linear-style
+ * tables used across the dashboard.
  *
  * When `readOnly` is set (admin), the create-owning edit/copy actions are
  * hidden so the admin can only view or delete.
@@ -47,8 +50,69 @@ export default function ExamTable({ exams, onAction, readOnly = false }) {
   }
 
   return (
-    <div className="scrollbar-thin overflow-x-auto">
-      <table className="w-full min-w-[1080px] border-collapse text-right">
+    <>
+      {/* Mobile card list */}
+      <div className="divide-y divide-slate-100 sm:hidden">
+        {exams.map((exam) => (
+          <div key={exam.id} className="flex min-w-0 flex-col gap-3 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                  {exam.subject.slice(0, 1)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-slate-800">{exam.name}</p>
+                  <p className="truncate text-xs text-slate-400">{exam.subject} · {exam.stage} · {exam.grade}</p>
+                </div>
+              </div>
+              <Badge tone={STATUS_TONE[exam.status] ?? 'neutral'}>
+                {EXAM_STATUSES[exam.status] ?? exam.status}
+              </Badge>
+            </div>
+
+            <div className="grid w-full grid-cols-2 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">المدرس</p>
+                <p className="mt-0.5 truncate text-sm font-bold text-slate-800">{exam.teacherName || '—'}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">عدد الأسئلة</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-800">{exam.questions.length}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">إجمالي الدرجات</p>
+                <p className="mt-0.5 text-sm font-bold text-primary">{calcTotalScore(exam.questions)}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">مدة الامتحان</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-800" dir="ltr">{exam.durationMinutes} دقيقة</p>
+              </div>
+              <div className="col-span-2 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">تاريخ الإنشاء</p>
+                <p className="mt-0.5 text-sm font-bold text-slate-800">{formatDate(exam.createdAt)}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {effectiveActions.map(({ key, icon: Icon, label, hoverClass }) => (
+                <button
+                  key={key}
+                  type="button"
+                  title={label}
+                  onClick={() => onAction(key, exam)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors duration-150 ${hoverClass}`}
+                >
+                  <Icon className="h-5 w-5" />
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop / tablet table */}
+      <div className="hidden scrollbar-thin overflow-x-auto sm:block">
+        <table className="w-full min-w-[1080px] border-collapse text-right">
         <thead>
           <tr className="border-b border-slate-100">
             <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">اسم الامتحان</th>
@@ -114,7 +178,8 @@ export default function ExamTable({ exams, onAction, readOnly = false }) {
             </motion.tr>
           ))}
         </tbody>
-      </table>
-    </div>
+        </table>
+      </div>
+    </>
   )
 }

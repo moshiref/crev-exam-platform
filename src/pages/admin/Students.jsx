@@ -41,10 +41,14 @@ export default function Students() {
   const [printTarget, setPrintTarget] = useState(null)
 
   // Trigger the browser print dialog once the off-screen card for a
-  // row-level "Print Card" action has mounted.
+  // row-level "Print Card" action has mounted. After the dialog closes the
+  // card is unmounted so a stale card never overlaps a later print job.
   useEffect(() => {
     if (!printTarget) return
-    const timer = setTimeout(() => window.print(), 150)
+    const timer = setTimeout(() => {
+      window.print()
+      setPrintTarget(null)
+    }, 150)
     return () => clearTimeout(timer)
   }, [printTarget])
 

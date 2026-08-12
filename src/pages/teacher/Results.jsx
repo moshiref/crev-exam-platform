@@ -90,11 +90,11 @@ export default function Results() {
           <h2 className="font-display text-xl font-extrabold text-slate-900 sm:text-2xl">النتائج</h2>
           <p className="mt-1 text-sm text-slate-500">{myAttempts.length} نتيجة سُجلت على امتحاناتك</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" icon={<HiOutlineArrowDownTray />} onClick={handleExportExcel}>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="flex-1 sm:flex-none" icon={<HiOutlineArrowDownTray />} onClick={handleExportExcel}>
             تصدير Excel
           </Button>
-          <Button variant="success" icon={<HiOutlinePrinter />} onClick={() => setPdfOpen(true)}>
+          <Button variant="success" className="flex-1 sm:flex-none" icon={<HiOutlinePrinter />} onClick={() => setPdfOpen(true)}>
             PDF / طباعة
           </Button>
         </div>
@@ -121,7 +121,7 @@ export default function Results() {
             ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-40"
+            className="flex-1 sm:w-40 sm:flex-none"
           />
         </div>
       </div>
@@ -133,8 +133,73 @@ export default function Results() {
             <p className="text-sm font-semibold text-slate-500">لا توجد نتائج مطابقة</p>
           </div>
         ) : (
-          <div className="scrollbar-thin overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-right">
+          <>
+            {/* Mobile card list */}
+            <div className="divide-y divide-slate-100 sm:hidden">
+              {myAttempts.map((attempt) => (
+                <div key={attempt.id} className="flex min-w-0 flex-col gap-3 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                        {attempt.studentName.slice(0, 1)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-slate-800">{attempt.studentName}</p>
+                        <p className="truncate font-mono text-xs text-slate-400" dir="ltr">{attempt.studentId}</p>
+                      </div>
+                    </div>
+                    <Badge tone={attempt.passed ? 'success' : 'danger'}>
+                      {attempt.passed ? 'ناجح' : 'راسب'}
+                    </Badge>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                    <p className="truncate text-sm font-bold text-slate-800">{attempt.examName}</p>
+                    <p className="truncate text-xs text-slate-400">{attempt.subject} · {attempt.grade}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">النتيجة</p>
+                      <p className="mt-0.5 text-sm font-bold text-primary">
+                        {attempt.score}<span className="text-slate-400"> / {attempt.totalScore}</span>
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">النسبة</p>
+                      <p className="mt-0.5 text-sm font-bold text-slate-800">{attempt.totalScore ? percent(attempt.score / attempt.totalScore) : '—'}</p>
+                    </div>
+                    <div className="col-span-2 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">تاريخ التسليم</p>
+                      <p className="mt-0.5 text-sm font-bold text-slate-800" dir="ltr">{formatDateTime(attempt.submittedAt)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title="تفاصيل الإجابات"
+                      onClick={() => handleAction('view', attempt)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-blue-50 hover:text-primary"
+                    >
+                      <HiOutlineEye className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="حذف"
+                      onClick={() => handleAction('delete', attempt)}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-red-50 hover:text-danger"
+                    >
+                      <HiOutlineTrash className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop / tablet table */}
+            <div className="hidden scrollbar-thin overflow-x-auto sm:block">
+              <table className="w-full min-w-[860px] border-collapse text-right">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الطالب</th>
@@ -195,8 +260,9 @@ export default function Results() {
                   </motion.tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
@@ -241,7 +307,7 @@ function SummaryTile({ label, value, tone }) {
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       className="rounded-card bg-card p-5 shadow-soft ring-1 ring-slate-100"
     >
-      <p className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl text-xl ${tones[tone]}`}>{value}</p>
+      <p className={`inline-flex h-10 min-w-10 items-center justify-center rounded-2xl px-2 text-lg ${tones[tone]}`}>{value}</p>
       <p className="mt-3 text-sm font-semibold text-slate-500">{label}</p>
     </motion.div>
   )

@@ -324,7 +324,7 @@ export function hydrateAll() {
   if (hydratePromise) return hydratePromise
   hydratePromise = (async () => {
     try {
-      const teacher = getCurrentTeacher ? getCurrentTeacher() : null
+      const teacher = isAdminAuthenticated() ? null : (getCurrentTeacher ? getCurrentTeacher() : null)
       if (teacher) {
         await Promise.all([
           loadTeacherScoped('students', teacher),
@@ -335,7 +335,7 @@ export function hydrateAll() {
         return
       }
       await Promise.all([
-        loadTable('students', 'id, name, stage, grade, parent_phone, status, created_at', rowToStudent),
+        loadTable('students', 'id, name, stage, grade, parent_phone, status, password, parent_pin, created_at', rowToStudent),
         loadTable('teachers', '*', rowToTeacher),
         loadTable('subjects', '*', rowToSubject),
         loadTable('exams', '*', rowToExam),
@@ -366,6 +366,7 @@ export const isBackendLive = () => live()
  * and to lock admin-only mutations away from teacher accounts.
  */
 function isTeacherContext() {
+  if (isAdminAuthenticated()) return false
   return Boolean(getCurrentTeacher ? getCurrentTeacher() : null)
 }
 
@@ -919,6 +920,7 @@ export async function deleteSubject(subjectId) {
  * Used both to auto-tag exams with their owner and to enforce ownership.
  */
 function currentOwner() {
+  if (isAdminAuthenticated()) return null
   return getCurrentTeacher ? getCurrentTeacher() : null
 }
 
@@ -1091,10 +1093,18 @@ async function nextExamId() {
  * automatically from the session. Admin-created exams carry no teacher.
  */
 export async function createExam(examData) {
-  const owner = currentOwner()
-  if (owner) {
-    assertWithinPermissions(owner, examData)
+  // Only teachers author exams (the admin page is read-only). The owner is the
+  // teacher logged into the CURRENT session, read straight from the session so
+  // a leftover admin session can never shadow them. `teachers.id` is the ONLY
+  // valid key for exams.teacher_id, so when no real teacher is present we stop
+  // with a clear error instead of posting a bogus key to the database.
+  const owner = getCurrentTeacher ? getCurrentTeacher() : null
+  if (!owner || !owner.id) {
+    throw new Error(
+      'لا يمكن حفظ الامتحان الآن: تعذّر تحديد حساب المدرس الحالي. سجّل الخروج ثم ادخل كمدرس وحاول مرة أخرى.'
+    )
   }
+  assertWithinPermissions(owner, examData)
   const exam = {
     ...examData,
     id: await nextExamId(),
@@ -1549,4 +1559,56 @@ export async function clearDemoData() {
       )
     )
   }
+}
+
+// ---------------------------------------------------------------------------
+// Admin — wipe all operational data (secure RPC, NOT a frontend DELETE).
+// Deletes students / teachers / exams / attempts rows ONLY. The static
+// catalog tables (subjects, classes) are intentionally left untouched.
+// ---------------------------------------------------------------------------
+
+// Server-side gate token. MUST match the constant in supabase/admin_wipe.sql.
+// Read the security note in that file before changing this value.
+const ADMIN_WIPE_TOKEN = 'crev-wipe-gate-0f8c2e9a-4b1d-47c6-a93e-5d2f1b7a8c04'
+
+/**
+ * Erases all operational data (students, teachers, exams, attempts) through
+ * the `admin_wipe_all_operational_data` RPC — never a direct client DELETE.
+ * The DB function is a single transaction, so on failure nothing is deleted
+ * and the in-memory cache is left untouched. Static catalog (subjects,
+ * classes) is preserved as-is.
+ */
+export async function wipeAllOperationalData() {
+  assertAdminContext()
+
+  let counts = { students: 0, teachers: 0, exams: 0, attempts: 0 }
+
+  if (live()) {
+    const { data, error } = await supabase.rpc('admin_wipe_all_operational_data', {
+      p_admin_token: ADMIN_WIPE_TOKEN,
+    })
+    if (error) {
+      console.error('[wipeAllOperationalData] فشل محو البيانات من Supabase:', error)
+      throw new Error(
+        error.code === 'PGRST202' || error.code === '42883'
+          ? 'دالة المحو غير منشورة على Supabase بعد. شغّل ملف supabase/admin_wipe.sql من SQL Editor ثم أعد المحاولة.'
+          : error.message || 'تعذّر تنفيذ محو البيانات على الخادم.'
+      )
+    }
+    const row = data && data[0]
+    counts = {
+      students: row?.students_deleted ?? 0,
+      teachers: row?.teachers_deleted ?? 0,
+      exams: row?.exams_deleted ?? 0,
+      attempts: row?.attempts_deleted ?? 0,
+    }
+  }
+
+  cache.students = []
+  cache.teachers = []
+  cache.exams = []
+  cache.attempts = []
+  clearNotifications()
+  touchCache()
+  return counts
 }

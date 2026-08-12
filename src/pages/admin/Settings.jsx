@@ -7,6 +7,8 @@ import {
   HiOutlineDevicePhoneMobile,
   HiOutlineEnvelope,
   HiOutlineArrowRightOnRectangle,
+  HiOutlineTrash,
+  HiOutlineExclamationTriangle,
 } from 'react-icons/hi2'
 import DashboardCard from '../../components/ui/DashboardCard.jsx'
 import Input from '../../components/ui/Input.jsx'
@@ -14,7 +16,10 @@ import Select from '../../components/ui/Select.jsx'
 import TextArea from '../../components/ui/TextArea.jsx'
 import Button from '../../components/ui/Button.jsx'
 import Badge from '../../components/ui/Badge.jsx'
+import Modal from '../../components/ui/Modal.jsx'
+import { useDisclosure } from '../../hooks/useDisclosure.js'
 import { logoutAdmin } from '../../services/auth.js'
+import * as repo from '../../services/repository.js'
 
 const SETTINGS_KEY = 'crev-platform-settings'
 
@@ -66,6 +71,11 @@ function readFileAsDataURL(file) {
 export default function Settings() {
   const [settings, setSettings] = useState(loadSettings)
   const [saved, setSaved] = useState(false)
+  const wipeDialog = useDisclosure(false)
+  const [wipeConfirm, setWipeConfirm] = useState('')
+  const [wipeBusy, setWipeBusy] = useState(false)
+  const [wipeError, setWipeError] = useState(null)
+  const [wipeResult, setWipeResult] = useState(null)
 
   useEffect(() => {
     applySettings(settings)
@@ -113,8 +123,28 @@ export default function Settings() {
     applySettings(DEFAULT_SETTINGS)
   }
 
+  /** Wipes all operational data via the admin RPC, then updates every dashboard. */
+  async function handleWipe() {
+    setWipeBusy(true)
+    setWipeError(null)
+    try {
+      const counts = await repo.wipeAllOperationalData()
+      setWipeResult(
+        `تم محو جميع البيانات بنجاح — حُذف ${counts.students} طالب و${counts.teachers} مدرس و${counts.exams} امتحان و${counts.attempts} نتيجة.`
+      )
+      setWipeConfirm('')
+      wipeDialog.close()
+    } catch (err) {
+      console.error('[handleWipe] فشل محو جميع البيانات:', err)
+      setWipeError(err.message || 'تعذّر تنفيذ محو البيانات.')
+    } finally {
+      setWipeBusy(false)
+    }
+  }
+
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <>
+      <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="font-display text-xl font-extrabold text-slate-900 sm:text-2xl">إعدادات المنصة</h2>
@@ -303,6 +333,81 @@ export default function Settings() {
           </Button>
         </div>
       </DashboardCard>
+
+      <DashboardCard title="منطقة الخطر">
+        <div className="flex flex-col gap-4">
+          <p className="text-sm leading-relaxed text-slate-500">
+            حذف جميع بيانات التشغيل نهائيًا من قاعدة البيانات: الطلاب والمدرسين والامتحانات
+            (بما فيها الأسئلة) والنتائج والمحاولات. لا تتأثر البيانات الأساسية للمنصة (المواد
+            والصفوف) ولا بنية النظام نفسها، ولا يمكن التراجع عن هذه العملية.
+          </p>
+
+          {wipeResult && (
+            <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 ring-1 ring-emerald-100">
+              <HiOutlineCheckCircle className="h-5 w-5 shrink-0" />
+              {wipeResult}
+            </div>
+          )}
+
+          <Button variant="danger" icon={<HiOutlineTrash />} onClick={wipeDialog.open} disabled={wipeBusy}>
+            محو جميع البيانات
+          </Button>
+        </div>
+      </DashboardCard>
     </div>
+
+    <Modal
+      isOpen={wipeDialog.isOpen}
+      onClose={wipeBusy ? undefined : wipeDialog.close}
+      title="محو جميع البيانات"
+      maxWidth="max-w-md"
+    >
+      <div className="flex flex-col gap-4">
+        <div className="flex items-start gap-3 rounded-2xl bg-red-50 p-4 text-sm leading-relaxed text-red-700 ring-1 ring-red-100">
+          <HiOutlineExclamationTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+          <span>
+            سيتم حذف جميع بيانات المنصة الحالية، بما في ذلك الطلاب والمدرسين والامتحانات
+            والأسئلة والنتائج والمحاولات والبيانات التشغيلية المرتبطة بها.
+            <strong> هذا الإجراء لا يمكن التراجع عنه.</strong>
+          </span>
+        </div>
+
+        <p className="text-sm text-slate-500">
+          للتأكيد، اكتب <span className="font-mono font-bold text-slate-800" dir="ltr">DELETE ALL</span> في
+          الحقل أدناه ثم اضغط «محو نهائي».
+        </p>
+
+        <Input
+          id="wipeConfirm"
+          label="التأكيد"
+          dir="ltr"
+          placeholder="DELETE ALL"
+          value={wipeConfirm}
+          onChange={(e) => setWipeConfirm(e.target.value)}
+          autoComplete="off"
+        />
+
+        {wipeError && (
+          <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600 ring-1 ring-red-100">
+            {wipeError}
+          </p>
+        )}
+
+        <div className="flex gap-3">
+          <Button variant="outline" className="flex-1" onClick={wipeDialog.close} disabled={wipeBusy}>
+            إلغاء
+          </Button>
+          <Button
+            variant="danger"
+            className="flex-1"
+            onClick={handleWipe}
+            disabled={wipeConfirm.trim() !== 'DELETE ALL' || wipeBusy}
+          >
+            {wipeBusy ? 'جارٍ المحو...' : 'محو نهائي'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+    </>
   )
 }

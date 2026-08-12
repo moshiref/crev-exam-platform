@@ -28,7 +28,7 @@ function SummaryTile({ label, value, tone }) {
       transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       className="rounded-card bg-card p-5 shadow-soft ring-1 ring-slate-100"
     >
-      <p className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl text-xl ${tones[tone]}`}>{value}</p>
+      <p className={`inline-flex h-10 min-w-10 items-center justify-center rounded-2xl px-2 text-lg ${tones[tone]}`}>{value}</p>
       <p className="mt-3 text-sm font-semibold text-slate-500">{label}</p>
     </motion.div>
   )
@@ -124,7 +124,40 @@ export default function Results() {
 
       {/* Per-exam rollup */}
       <DashboardCard title="ملخص النتائج حسب الامتحان" delay={0.1}>
-        <div className="scrollbar-thin overflow-x-auto">
+        {/* Mobile card list */}
+        <div className="divide-y divide-slate-100 sm:hidden">
+          {examRollup.length === 0 ? (
+            <p className="py-8 text-center text-sm font-semibold text-slate-400">لا توجد نتائج بعد</p>
+          ) : (
+            examRollup.map((exam) => (
+              <div key={exam.name} className="flex min-w-0 flex-col gap-3 py-4 first:pt-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-slate-800">{exam.name}</p>
+                  <p className="truncate text-xs text-slate-400">{exam.subject}</p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">المتقدمون</p>
+                    <p className="mt-0.5 text-sm font-bold text-slate-800">{exam.total}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">ناجح</p>
+                    <p className="mt-0.5 text-sm font-bold text-emerald-600">{exam.passed}</p>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">متوسط النسبة</p>
+                    <p className="mt-0.5 text-sm font-bold text-slate-800">
+                      {exam.sumTotal ? percent(exam.sumScore / exam.sumTotal, 1) : '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop / tablet table */}
+        <div className="hidden scrollbar-thin overflow-x-auto sm:block">
           <table className="w-full min-w-[620px] border-collapse text-right">
             <thead>
               <tr className="border-b border-slate-100">
@@ -179,7 +212,7 @@ export default function Results() {
             ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-40"
+            className="flex-1 sm:w-40 sm:flex-none"
           />
         </div>
       </div>
@@ -197,8 +230,73 @@ export default function Results() {
             }
           />
         ) : (
-          <div className="scrollbar-thin overflow-x-auto">
-            <table className="w-full min-w-[860px] border-collapse text-right">
+          <>
+            {/* Mobile card list */}
+            <div className="divide-y divide-slate-100 sm:hidden">
+              {attempts.map((attempt) => (
+                <div key={attempt.id} className="flex min-w-0 flex-col gap-3 py-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary text-sm font-bold text-white">
+                        {attempt.studentName.slice(0, 1)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-slate-800">{attempt.studentName}</p>
+                        <p className="truncate font-mono text-xs text-slate-400" dir="ltr">{attempt.studentId}</p>
+                      </div>
+                    </div>
+                    <Badge tone={attempt.passed ? 'success' : 'danger'}>
+                      {attempt.passed ? 'ناجح' : 'راسب'}
+                    </Badge>
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                    <p className="truncate text-sm font-bold text-slate-800">{attempt.examName}</p>
+                    <p className="truncate text-xs text-slate-400">{attempt.subject} · {attempt.grade}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-50/60 p-3 ring-1 ring-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">النتيجة</p>
+                      <p className="mt-0.5 text-sm font-bold text-primary">
+                        {attempt.score}<span className="text-slate-400"> / {attempt.totalScore}</span>
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">النسبة</p>
+                      <p className="mt-0.5 text-sm font-bold text-slate-800">{attempt.totalScore ? percent(attempt.score / attempt.totalScore) : '—'}</p>
+                    </div>
+                    <div className="col-span-2 min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">تاريخ التسليم</p>
+                      <p className="mt-0.5 text-sm font-bold text-slate-800" dir="ltr">{formatDateTime(attempt.submittedAt)}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title="عرض النتيجة"
+                      onClick={() => { setDetailAttempt(attempt); detailModal.open() }}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-blue-50 hover:text-primary"
+                    >
+                      <HiOutlineEye className="h-5 w-5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="حذف"
+                      onClick={() => { setAttemptToDelete(attempt); deleteDialog.open() }}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-red-50 hover:text-danger"
+                    >
+                      <HiOutlineTrash className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop / tablet table */}
+            <div className="hidden scrollbar-thin overflow-x-auto sm:block">
+              <table className="w-full min-w-[860px] border-collapse text-right">
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-400">الطالب</th>
@@ -258,9 +356,10 @@ export default function Results() {
                     </td>
                   </motion.tr>
                 ))}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
