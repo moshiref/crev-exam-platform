@@ -72,12 +72,13 @@ export default function StudentLogin() {
     }
   }
 
-  // The credential check should run in a SECURITY DEFINER RPC (so the anon key
-  // never reads `password` directly). The `student_login` RPC is not deployed to
-  // the anon role yet, so calling it logs a 404 in the console. Keep that path
-  // dormant until the RPC is live, then flip this flag to true and the RPC-first
-  // flow (with the PGRST202 fallback) resumes automatically.
-  const STUDENT_LOGIN_RPC_READY = false
+  // The credential check MUST run in a SECURITY DEFINER RPC (so the anon key
+  // never reads `password` directly — that column is REVOKED from anon, see
+  // rls_students.sql / provision.sql). The `student_login` RPC is deployed by
+  // the provisioning SQL; if it is somehow missing (fresh DB before
+  // provisioning) the legacy direct-table path is tried as a fallback and
+  // fails cleanly when the secret columns are unreadable.
+  const STUDENT_LOGIN_RPC_READY = true
 
   /** Matches a code/password against the students table (live) or cache (mock). */
   async function authenticate(id, enteredPassword) {

@@ -26,7 +26,7 @@ function mulberry32(seed) {
   }
 }
 
-const rand = mulberry32(2026812)
+let rand = mulberry32(2026812)
 const randInt = (min, max) => Math.floor(rand() * (max - min + 1)) + min
 const pick = (arr) => arr[Math.floor(rand() * arr.length)]
 const pad = (n) => String(n).padStart(2, '0')
@@ -88,7 +88,7 @@ function buildExam(index) {
   const totalScore = questions.reduce((s, q) => s + q.score, 0)
   const passScore = Math.max(1, Math.round(totalScore / 2))
   const isPublished = index % 3 !== 0 // 7 published, 3 drafts
-  const createdAt = `2026-0${index + 1}-${pad(5)}`
+  const createdAt = `2026-${pad(index + 1)}-${pad(5)}`
 
   return {
     id: `EX-${String(index + 1).padStart(3, '0')}`,
@@ -152,6 +152,12 @@ function buildAttempt(attemptSeq, student, exam) {
 // Builds the complete demo dataset.
 // ---------------------------------------------------------------------------
 export function createDemoDataset() {
+  // Reset the seeded PRNG on every call so repeated loads — including
+  // "Load demo data" → "Clear demo data" → "Load demo data" in the same
+  // session — always rebuild the exact same deterministic dataset.
+  rand = mulberry32(2026812)
+  attemptSeq = 0
+
   // Subjects (6)
   const subjects = SUBJECTS.map((name, i) => ({
     id: `SUB-${String(i + 1).padStart(2, '0')}`,
@@ -221,7 +227,6 @@ export function createDemoDataset() {
   const published = exams.filter((e) => e.isPublished)
 
   // Attempts (results) — a chunk of students per published exam
-  attemptSeq = 0
   const attempts = []
   published.forEach((exam) => {
     const count = randInt(12, 28)

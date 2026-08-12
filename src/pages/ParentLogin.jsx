@@ -104,15 +104,24 @@ export default function ParentLogin() {
 
   async function authenticate(code) {
     if (isSupabaseConfigured) {
-      // The `parent_login` RPC isn't deployed on this project yet (causing a
-      // 404), so the PIN check runs directly against the students table — the
-      // same query that previously succeeded as the legacy fallback.
-      const { data } = await supabase
+      // Preferred path: the `parent_login` SECURITY DEFINER RPC (see
+      // rls_students.sql / provision.sql). It verifies the PIN inside the DB —
+      // the anon key never reads the `parent_pin` column — and returns up to
+      // two matching active students so the app can enforce "exactly one".
+      const { data, error } = await supabase.rpc('parent_login', { p_pin: code })
+      if (!error) {
+        const rows = data || []
+        return rows.length === 1 ? rows[0] : null
+      }
+      // RPC missing on a not-yet-provisioned DB (PGRST202/42883) → legacy
+      // direct-table check; any other error is a real failure.
+      if (error.code !== 'PGRST202' && error.code !== '42883') return null
+      const { data: legacy } = await supabase
         .from('students')
         .select('id, name, stage, grade, status, parent_phone, parent_pin')
         .eq('parent_pin', code)
         .eq('status', 'Active')
-      return data && data.length === 1 ? data[0] : null
+      return legacy && legacy.length === 1 ? legacy[0] : null
     }
     const matches = repo.listStudents().filter((s) => s.status === 'Active' && String(s.parentPin) === code)
     return matches.length === 1 ? matches[0] : null

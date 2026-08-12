@@ -112,9 +112,9 @@ const rowToClass = (row) => ({
   examsCount: row.exams_count ?? 0,
 })
 
-// The live `classes` table only stores `name` (`id` is a DB-generated UUID,
-// so it cannot be supplied by the app — there is no stage/count column).
-const classToRow = (cls) => ({ name: cls.name })
+// The `classes` table stores `id` (text, admin-generated CLS-xx), `stage` and
+// `name` — ALL are supplied by the app in this schema (see schema.sql).
+const classToRow = (cls) => ({ id: cls.id, stage: cls.stage ?? '', name: cls.name })
 
 const examToRow = (exam) => ({
   id: exam.id,
@@ -226,6 +226,46 @@ function touchCache() {
   emitCacheChange()
 }
 
+// ---------------------------------------------------------------------------
+// One-time client-cache cleanup (localStorage).
+//
+// Older sessions / demo runs may have persisted platform data under
+// `crev-cache:*` and the notification feed under `crev-admin-notifications`.
+// If those keys survived, dashboard lists would show stale records even when
+// the database itself is empty. This runs exactly once per browser and
+// deletes ONLY the platform data cache — never auth sessions, remember-me
+// credentials, theme or platform settings.
+// ---------------------------------------------------------------------------
+
+const CACHE_CLEANUP_FLAG_KEY = 'crev-client-cache-cleaned:v1'
+
+/**
+ * Removes persisted platform data caches from localStorage, once per browser.
+ * Never touches auth / remember-me / theme / settings keys.
+ */
+function cleanupStaleClientCacheOnce() {
+  try {
+    if (window.localStorage.getItem(CACHE_CLEANUP_FLAG_KEY)) return
+    const staleKeys = []
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      const key = window.localStorage.key(i)
+      if (key && (key.startsWith(CACHE_STORAGE_PREFIX) || key === 'crev-admin-notifications')) {
+        staleKeys.push(key)
+      }
+    }
+    staleKeys.forEach((key) => window.localStorage.removeItem(key))
+    if (staleKeys.length) {
+      /* eslint-disable-next-line no-console */
+      console.info(`[repository] cleaned ${staleKeys.length} stale platform cache key(s):`, staleKeys)
+    }
+    window.localStorage.setItem(CACHE_CLEANUP_FLAG_KEY, '1')
+  } catch {
+    /* storage unavailable — nothing persisted means nothing to clean */
+  }
+}
+
+cleanupStaleClientCacheOnce()
+
 try {
   window.addEventListener('storage', (e) => {
     if (!e.key || !e.key.startsWith(CACHE_STORAGE_PREFIX)) return
@@ -295,7 +335,7 @@ async function loadTeacherScoped(key, teacher) {
 /** Full-table load used only when the teacher scoping RPCs are unavailable. */
 async function loadTeacherScopedFallback(key) {
   const loaders = {
-    students: () => loadTable('students', 'id, name, stage, grade, parent_phone, status, password, created_at', rowToStudent),
+    students: () => loadTable('students', 'id, name, stage, grade, parent_phone, status, created_at', rowToStudent),
     exams: () => loadTable('exams', '*', rowToExam),
     attempts: () => loadTable('attempts', '*', rowToAttempt),
   }
@@ -335,7 +375,7 @@ export function hydrateAll() {
         return
       }
       await Promise.all([
-        loadTable('students', 'id, name, stage, grade, parent_phone, status, password, parent_pin, created_at', rowToStudent),
+        loadTable('students', 'id, name, stage, grade, parent_phone, status, created_at', rowToStudent),
         loadTable('teachers', '*', rowToTeacher),
         loadTable('subjects', '*', rowToSubject),
         loadTable('exams', '*', rowToExam),
@@ -1438,7 +1478,7 @@ const MODEL_COLUMNS = {
   students: ['id', 'name', 'stage', 'grade', 'parent_phone', 'status', 'password', 'parent_pin', 'created_at'],
   teachers: ['id', 'name', 'subject', 'subjects', 'stages', 'grades', 'stage', 'grade', 'phone', 'status', 'username', 'password', 'session_token'],
   subjects: ['id', 'name', 'teachers_count', 'exams_count'],
-  classes: ['id', 'name'],
+  classes: ['id', 'stage', 'name'],
   exams: ['id', 'name', 'subject', 'stage', 'grade', 'duration_minutes', 'status', 'created_at', 'scheduled_date', 'start_time', 'end_time', 'instructions', 'pass_score', 'archived', 'questions', 'teacher_id', 'teacher_name'],
   attempts: ['id', 'exam_id', 'exam_name', 'subject', 'grade', 'student_id', 'student_name', 'submitted_at', 'score', 'total_score', 'pass_score', 'passed', 'answers'],
 }
@@ -1553,9 +1593,9 @@ export async function clearDemoData() {
         supabase
           .from(TABLE[table])
           .delete()
-          // classes.id is a UUID; a text sentinel would throw a cast error,
-          // so use a valid zero-UUID there and a text sentinel elsewhere.
-          .neq('id', table === 'classes' ? '00000000-0000-0000-0000-000000000000' : 'noop')
+          // All tables use text ids in this schema — a `'noop'` sentinel never
+          // matches a real row, so every row is removed (guaranteed empty).
+          .neq('id', 'noop')
       )
     )
   }
