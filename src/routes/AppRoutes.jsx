@@ -25,7 +25,6 @@ const Classes = lazy(() => import('../pages/admin/Classes.jsx'))
 const Exams = lazy(() => import('../pages/admin/Exams.jsx'))
 const Results = lazy(() => import('../pages/admin/Results.jsx'))
 const Reports = lazy(() => import('../pages/admin/Reports.jsx'))
-const DemoData = lazy(() => import('../pages/admin/DemoData.jsx'))
 const Settings = lazy(() => import('../pages/admin/Settings.jsx'))
 
 const TeacherLayout = lazy(() => import('../layouts/TeacherLayout.jsx'))
@@ -72,7 +71,6 @@ export default function AppRoutes() {
           <Route path="exams" element={<Exams />} />
           <Route path="results" element={<Results />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="demo-data" element={<DemoData />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

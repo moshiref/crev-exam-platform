@@ -15,7 +15,6 @@ const PAGE_TITLES = {
   '/admin/exams': 'الامتحانات',
   '/admin/results': 'النتائج',
   '/admin/reports': 'التقارير',
-  '/admin/demo-data': 'البيانات التجريبية',
   '/admin/settings': 'الإعدادات',
 }
 

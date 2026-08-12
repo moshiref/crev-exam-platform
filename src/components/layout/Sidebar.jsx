@@ -10,7 +10,6 @@ import {
   HiOutlineChartPie,
   HiOutlineDocumentChartBar,
   HiOutlineSquares2X2,
-  HiOutlineSparkles,
   HiXMark,
 } from 'react-icons/hi2'
 import { PiChalkboardTeacherDuotone, PiCrownDuotone } from 'react-icons/pi'
@@ -44,7 +43,6 @@ const NAV_GROUPS = [
   {
     label: 'النظام',
     items: [
-      { labelAr: 'البيانات التجريبية', to: '/admin/demo-data', icon: HiOutlineSparkles },
       { labelAr: 'الإعدادات', to: '/admin/settings', icon: HiOutlineCog6Tooth },
     ],
   },

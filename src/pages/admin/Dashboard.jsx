@@ -157,17 +157,10 @@ export default function Dashboard() {
           <p className="mt-1 text-sm font-medium text-blue-50">
             {hasData
               ? new Intl.DateTimeFormat('ar-EG', { dateStyle: 'full' }).format(new Date())
-              : 'ابدأ بإضافة بياناتك أو اعرض المنصة ببيانات تجريبية.'}
+              : 'ابدأ بإضافة بياناتك.'}
           </p>
         </div>
         <div className="relative z-10 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[560px]">
-          <Link
-            to="/admin/demo-data"
-            className="flex items-center justify-center gap-2 rounded-xl bg-white text-primary px-4 py-3 text-sm font-extrabold ring-1 ring-white/30 transition-colors hover:bg-white/90"
-          >
-            <HiOutlineSparkles className="text-lg" />
-            بيانات تجريبية
-          </Link>
           {QUICK_ACTIONS.map((qa) => (
             <Link
               key={qa.label}
@@ -192,12 +185,7 @@ export default function Dashboard() {
         <EmptyState
           icon={<HiOutlineInboxStack />}
           title="لا توجد بيانات بعد"
-          description="لوحة المعلومات فارغة حاليًا. حمّل البيانات التجريبية لملء جميع اللوحات في لمح البصر، أو ابدأ بإضافة طلاب وامتحانات بنفسك."
-          action={
-            <Link to="/admin/demo-data">
-              <Button variant="outline" size="md" icon={<HiOutlineSparkles />}>تحميل بيانات تجريبية</Button>
-            </Link>
-          }
+          description="لوحة المعلومات فارغة حاليًا. ابدأ بإضافة طلاب وامتحانات بنفسك."
         />
       )}
 
@@ -240,7 +228,7 @@ export default function Dashboard() {
             <EmptyState
               className="py-10"
               title="لا يوجد طلاب حتى الآن"
-              description="أضف أول طالب أو حمّل بيانات تجريبية."
+              description="أضف أول طالب ليظهر هنا."
               action={<Link to="/admin/students"><Button size="sm" variant="outline">إضافة طالب</Button></Link>}
             />
           ) : (
@@ -278,7 +266,7 @@ export default function Dashboard() {
             <EmptyState
               className="py-10"
               title="لا توجد امتحانات بعد"
-              description="أنشئ أول امتحان أو حمّل بيانات تجريبية."
+              description="أنشئ أول امتحان ليظهر هنا."
               action={<Link to="/admin/exams"><Button size="sm" variant="outline">إدارة الامتحانات</Button></Link>}
             />
           ) : (
